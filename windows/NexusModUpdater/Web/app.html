@@ -11,6 +11,7 @@
   --line: rgba(255,255,255,.083); --ctl: rgba(255,255,255,.061); --ctlhover: rgba(255,255,255,.084); --ctlline: rgba(255,255,255,.093);
   --fg: #ffffff; --fg2: rgba(255,255,255,.786); --fg3: rgba(255,255,255,.545); --chip: rgba(255,255,255,.07);
   --solid: #2c2c2c; --shadow: rgba(0,0,0,.4); --thumb: rgba(0,0,0,.3);
+  --shine: rgba(255,255,255,.07);
   --new: #f0a050; --onnew: rgba(0,0,0,.9); --ok: #6ccb5f; --warn: #fce100; --danger: #ff99a4; --info: #60cdff;
 }
 :root.light {
@@ -19,6 +20,7 @@
   --line: rgba(0,0,0,.075); --ctl: rgba(255,255,255,.3); --ctlhover: rgba(255,255,255,.42); --ctlline: rgba(0,0,0,.1);
   --fg: rgba(0,0,0,.9); --fg2: rgba(0,0,0,.64); --fg3: rgba(0,0,0,.5); --chip: rgba(0,0,0,.06);
   --solid: #f9f9f9; --shadow: rgba(0,0,0,.14); --thumb: rgba(0,0,0,.08);
+  --shine: rgba(255,255,255,.5);
   --new: #c25e00; --onnew: #fff; --ok: #0f7b0f; --warn: #9d5d00; --danger: #c42b1c; --info: #005fb8;
 }
 * { box-sizing: border-box; }
@@ -154,8 +156,18 @@ body.resizing * { user-select: none !important; }
 .row:hover { background: var(--cardhover); }
 .row.sel { border-color: var(--accent); }
 .row.dim { opacity: .6; }
-.thumb { width: 200px; height: 112px; border-radius: 6px; background: var(--thumb) center/cover no-repeat; overflow: hidden; }
-.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb { width: 200px; height: 112px; border-radius: 6px; background: var(--thumb) center/cover no-repeat; overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; transition: opacity .25s; }
+.thumb.ld img { opacity: 0; }
+/* 图片加载中：一道微光从左扫到右；加载完淡入；加载失败显示图片图标 */
+.ld, [data-bg] { position: relative; overflow: hidden; }
+.ld::after, [data-bg]::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(100deg, transparent 25%, var(--shine) 50%, transparent 75%); transform: translateX(-100%); animation: shimmer 1.4s ease-in-out infinite; }
+@keyframes shimmer { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .ld::after, [data-bg]::after { animation: none; transform: none; } }
+.noimg { display: flex; align-items: center; justify-content: center; }
+.noimg::before { content: ""; width: 30%; max-width: 40px; aspect-ratio: 1; background: var(--fg3); opacity: .55;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2.5'/%3E%3Ccircle cx='9' cy='10' r='1.8'/%3E%3Cpath d='M4 18l5-5 3.5 3.5L16 13l4 4'/%3E%3C/svg%3E") center/contain no-repeat; }
+.gcover .chip, .gcover .gpin { z-index: 1; }
 .info { min-width: 0; }
 .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .name .orig { font-weight: 400; color: var(--fg3); margin-left: 6px; font-size: 12px; }
@@ -422,7 +434,7 @@ function counts() {
   call('counts', { updates: c.updates, downloads: active }).catch(() => {});
 }
 function rowHtml(m) {
-  const pic = m.picture ? '<img loading="lazy" src="' + esc(m.picture) + '" onerror="this.remove()">' : '';
+  const pic = m.picture ? '<img loading="lazy" src="' + esc(m.picture) + '" onload="this.parentNode.classList.remove(\'ld\')" onerror="this.parentNode.classList.replace(\'ld\', \'noimg\'); this.remove()">' : '';
   const name = trSpan(m.name);
   const tName = tr(m.name);
   const sum = m.summary ? trSpan(m.summary.split('\n')[0]) : '<span class="muted">' + (m.hasInfo ? '' : '（还没查到详细信息）') + '</span>';
@@ -438,7 +450,7 @@ function rowHtml(m) {
     : '<span title="' + date(m.latest) + '">更新于 ' + ago(m.latest) + '</span><span title="' + date(m.baseline) + '">下载于 ' + ago(m.lastDownload || m.baseline) + '</span>';
   return '<div class="row' + (S.detailKey === m.key ? ' sel' : '') + (m.ignoreActive ? ' dim' : '') + '" data-key="' + esc(m.key) + '">' +
     '<input type="checkbox" class="pick"' + (S.sel.has(m.key) ? ' checked' : '') + '>' +
-    '<div class="thumb">' + pic + '</div>' +
+    '<div class="thumb ' + (m.picture ? 'ld' : 'noimg') + '">' + pic + '</div>' +
     '<div class="info"><div class="name">' + name + '<span class="orig"' + (tName ? '' : ' hidden') + '>' + esc(m.name) + '</span></div>' +
     '<div class="sum">' + sum + '</div>' +
     '<div class="meta">' + (m.author ? '<span>' + esc(m.author) + '</span>' : '') + (m.version ? '<span>v' + esc(m.version) + '</span>' : '') + when + '</div></div>' +
@@ -504,7 +516,25 @@ function gameStats() {
 function quickList() {
   return Array.from(S.games.values()).filter(g => g.pinned >= 0).sort((a, b) => a.pinned - b.pinned).map(g => g.domain);
 }
-function coverStyle(d) { const c = gameCover(d); return c ? ' style="background-image:url(&quot;' + esc(c) + '&quot;)"' : ''; }
+function coverStyle(d) { const c = gameCover(d); return c ? ' data-bg="' + esc(c) + '"' : ''; }
+// 带 data-bg 的元素：后台加载图片，加载完设成背景并去掉加载动画，失败就显示图片图标
+function loadBgs() {
+  document.querySelectorAll('[data-bg]').forEach(el => {
+    if (el._bgLoading) return;
+    el._bgLoading = true;
+    const url = el.dataset.bg;
+    const img = new Image();
+    const done = ok => {
+      if (ok) el.style.backgroundImage = 'url("' + url.replace(/"/g, '%22') + '")'; else el.classList.add('noimg');
+      el.removeAttribute('data-bg');
+    };
+    img.onload = () => done(true);
+    img.onerror = () => done(false);
+    img.src = url;
+    if (img.complete && img.naturalWidth) done(true);
+  });
+}
+new MutationObserver(loadBgs).observe(document.documentElement, { childList: true, subtree: true });
 function initials(name) { return esc((name || '?').replace(/^the\s+/i, '').slice(0, 2)); }
 
 function gcardHtml(d, x) {
@@ -748,7 +778,7 @@ function renderDetail() {
   const tName = tr(d.name);
   const url = 'https://www.nexusmods.com/' + d.domain + '/mods/' + d.modId;
   let h = '';
-  h += '<div class="d-pic" style="background-image:url(\'' + esc(d.picture || '') + '\')"></div>';
+  h += '<div class="d-pic' + (d.picture ? '' : ' noimg') + '"' + (d.picture ? ' data-bg="' + esc(d.picture) + '"' : '') + '></div>';
   h += '<div class="d-head"><div style="display:flex;gap:8px;align-items:flex-start"><h2 style="flex:1">' + trSpan(d.name) + '</h2><button class="small ghost" id="dClose" title="关闭">✕</button></div>' +
     '<div class="orig"' + (tName ? '' : ' hidden') + '>' + esc(d.name) + '</div>' +
     '<div class="meta"><span>' + esc(d.game || m.game || '') + '</span>' + (d.author ? '<span>作者 ' + esc(d.author) + '</span>' : '') + (d.version ? '<span>v' + esc(d.version) + '</span>' : '') +

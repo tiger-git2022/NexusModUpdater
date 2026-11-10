@@ -170,6 +170,15 @@
                             <ui:CardControl Icon="{ui:SymbolIcon ArrowSync24}" Header="打开程序时自动检查更新">
                                 <ui:ToggleSwitch x:Name="SyncOnStart" Click="Option_Changed"/>
                             </ui:CardControl>
+                            <ui:CardControl Icon="{ui:SymbolIcon ArrowMinimize24}">
+                                <ui:CardControl.Header>
+                                    <StackPanel>
+                                        <TextBlock Text="点关闭时最小化到托盘"/>
+                                        <TextBlock Style="{StaticResource Muted}" Text="缩到任务栏右下角的通知区域，下载和检查在后台继续；单击托盘图标打开，右键可以退出"/>
+                                    </StackPanel>
+                                </ui:CardControl.Header>
+                                <ui:ToggleSwitch x:Name="CloseToTrayBox" Click="Option_Changed"/>
+                            </ui:CardControl>
 
                             <DockPanel Margin="2,18,0,8">
                                 <ui:Button DockPanel.Dock="Right" Content="添加游戏" Icon="{ui:SymbolIcon Add24}" Click="AddGame_Click"/>

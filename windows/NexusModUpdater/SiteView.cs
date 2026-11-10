@@ -267,12 +267,52 @@ public sealed class SiteView : Grid
 			core.DownloadStarting += OnDownloadStarting;
 			core.WebMessageReceived += OnMessage;
 			core.DocumentTitleChanged += delegate { _main.FlagSite(); };
+			core.NavigationCompleted += async (s, e) =>
+			{
+				if (e.IsSuccess)
+				{
+					await FixMissingStylesAsync(core);
+				}
+			};
 			core.Navigate(_pending ?? Home);
 			_pending = null;
 		}
 		catch (Exception ex)
 		{
 			Logger.Log("N网页面初始化失败：" + ex);
+		}
+	}
+
+	private string _styleRetry;
+
+	/// <summary>
+	/// 页面的样式表没加载上（只剩光秃秃的 HTML）时跳过缓存重新加载一次：常见原因是缓存里的旧页面
+	/// 引用了 N 网改版后已经不存在的样式文件。
+	/// </summary>
+	private async Task FixMissingStylesAsync(CoreWebView2 core)
+	{
+		try
+		{
+			string url = core.Source ?? "";
+			if (url.IndexOf("nexusmods.com", StringComparison.OrdinalIgnoreCase) < 0)
+			{
+				return;
+			}
+			string r = await core.ExecuteScriptAsync(@"(function () {
+  var links = [].slice.call(document.querySelectorAll('link[rel=stylesheet]')).filter(function (l) { return l.href.indexOf(location.host) >= 0; });
+  return links.some(function (l) { try { return !l.sheet || l.sheet.cssRules.length === 0; } catch (e) { return false; } }) ? 'broken' : 'ok';
+})()");
+			if (r != "\"broken\"" || _styleRetry == url)
+			{
+				return;
+			}
+			_styleRetry = url;
+			Logger.Log("N网页面的样式没加载上，跳过缓存重新加载：" + url);
+			await core.CallDevToolsProtocolMethodAsync("Page.reload", "{\"ignoreCache\":true}");
+		}
+		catch (Exception ex)
+		{
+			Logger.Log("检查页面样式失败：" + ex.Message);
 		}
 	}
 

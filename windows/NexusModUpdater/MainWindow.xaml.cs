@@ -93,13 +93,21 @@ public partial class MainWindow : FluentWindow
 				await CheckAppUpdateAsync(false);
 			}
 		};
+		InitTray();
 		Closing += (s, e) =>
 		{
+			// 点关闭：缩到托盘（设置里可以关掉）
+			if (CloseToTray())
+			{
+				e.Cancel = true;
+				return;
+			}
 			if (Downloader.All().Any(j => !j.Finished && j.Status != "browser"))
 			{
 				if (MessageBox.Show("还有下载没完成，确定要退出吗？", "N网 Mod 更新", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
 				{
 					e.Cancel = true;
+					_exiting = false;
 				}
 			}
 		};
@@ -127,9 +135,7 @@ public partial class MainWindow : FluentWindow
 		string tag = (sender as FrameworkElement)?.Tag?.ToString();
 		if (tag == "dl")
 		{
-			_appView = "downloads";
-			_app.ShowView("downloads");
-			SelectPage(0);
+			ShowDownloads();
 		}
 		else if (int.TryParse(tag, out int page))
 		{
@@ -155,6 +161,7 @@ public partial class MainWindow : FluentWindow
 	{
 		NavDlBadge.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
 		NavDlCount.Text = n > 99 ? "99+" : n.ToString();
+		UpdateTrayText(n);
 	}
 
 	public void SelectPage(int page)
@@ -300,6 +307,7 @@ public partial class MainWindow : FluentWindow
 		UseTracked.IsChecked = c.UseTracked;
 		ScanFolders.IsChecked = c.ScanFolders;
 		SyncOnStart.IsChecked = c.SyncOnStart;
+		CloseToTrayBox.IsChecked = c.CloseToTray;
 		CheckAppUpdate.IsChecked = c.CheckAppUpdate;
 		EngineBox.SelectedItem = EngineBox.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == c.TranslateEngine) ?? EngineBox.Items[0];
 		Lang.SelectedItem = Lang.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == c.TargetLang) ?? Lang.Items[0];
@@ -338,8 +346,10 @@ public partial class MainWindow : FluentWindow
 			c.ScanFolders = ScanFolders.IsChecked == true;
 			c.SyncOnStart = SyncOnStart.IsChecked == true;
 			c.CheckAppUpdate = CheckAppUpdate.IsChecked == true;
+			c.CloseToTray = CloseToTrayBox.IsChecked == true;
 		}
 		Store.SaveConfig();
+		UpdateTrayVisible();
 	}
 
 	private void Translate_Changed(object sender, RoutedEventArgs e)
@@ -861,6 +871,7 @@ public partial class MainWindow : FluentWindow
 			}));
 			Store.SaveNow();
 			Updater.StartInstall(newExe);
+			_exiting = true;
 			Application.Current.Shutdown();
 		}
 		catch (Exception ex)

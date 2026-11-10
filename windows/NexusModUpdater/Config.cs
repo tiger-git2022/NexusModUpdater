@@ -97,6 +97,12 @@ public sealed class Config
 
 	public bool SyncOnStart = true;
 
+	/// <summary>点关闭时缩到托盘（通知区域），程序在后台继续。</summary>
+	public bool CloseToTray = true;
+
+	/// <summary>已经提示过「还在后台运行」。</summary>
+	public bool TrayHinted;
+
 	public bool CheckAppUpdate = true;
 
 	public Dictionary<string, GameSetting> Games = new Dictionary<string, GameSetting>(StringComparer.OrdinalIgnoreCase);
