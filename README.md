@@ -126,7 +126,8 @@ dotnet build windows\NexusModUpdater.csproj -c Release -o out
 
 ## 发布流程
 
-在 [CHANGELOG.md](CHANGELOG.md) 顶部加一节 `## [X.Y.Z] - 日期`，合并（或推送）到 `main`。GitHub Actions 发现这个版本号还没有 `vX.Y.Z` 标签，就会自动编译，把编译好的单个 `NexusModUpdater.exe`（依赖都用 Costura 打包在里面）发布到 Releases 并打上标签。最上面一节写成 `- 未发布` 时只编译、不发布。
+改动都在新分支上做，开 PR 到 `main`：PR 上 GitHub Actions 会先编译一遍，编译通过再合并，每次改了什么在 PR 里都能看到。
+要发新版本时，在 [CHANGELOG.md](CHANGELOG.md) 顶部加一节 `## [X.Y.Z] - 日期`，随 PR 合并到 `main`。GitHub Actions 发现这个版本号还没有 `vX.Y.Z` 标签，就会自动编译，把编译好的单个 `NexusModUpdater.exe`（依赖都用 Costura 打包在里面）发布到 Releases 并打上标签。最上面一节写成 `- 未发布` 时只编译、不发布。
 
 也可以自己推送形如 `vX.Y.Z` 的 tag 来发布。
 

@@ -4,11 +4,14 @@ name: Release
 #   如果还没有对应的 v版本号 标签，就自动发布并创建标签；否则只编译。标成“未发布”的版本不会发布。
 # 推送 v* 标签时：按标签的版本号发布。
 # 手动运行时：填版本号就发布，留空只编译。
+# 开 PR 到 main 时：只编译，确认能编出单个 exe（不发布）；编译通过后再合并。
 on:
   push:
     branches: [main]
     tags:
       - "v*.*.*"
+  pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       version:
