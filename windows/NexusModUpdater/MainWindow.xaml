@@ -158,7 +158,7 @@
                             <ui:CardControl Icon="{ui:SymbolIcon Eye24}" Header="N 网上「追踪」的 mod">
                                 <ui:ToggleSwitch x:Name="UseTracked" Click="Option_Changed"/>
                             </ui:CardControl>
-                            <ui:CardControl Icon="{ui:SymbolIcon FolderSearch24}">
+                            <ui:CardControl Icon="{ui:SymbolIcon FolderZip24}">
                                 <ui:CardControl.Header>
                                     <StackPanel>
                                         <TextBlock Text="扫描 mod 文件夹里从 N 网下载的压缩包和解压出来的文件夹"/>
@@ -222,7 +222,7 @@
                                         <ComboBoxItem Content="deepseek-v4-pro"/>
                                     </ComboBox>
                                 </ui:CardControl>
-                                <ui:CardControl Icon="{ui:SymbolIcon Brain24}">
+                                <ui:CardControl Icon="{ui:SymbolIcon BrainCircuit24}">
                                     <ui:CardControl.Header>
                                         <StackPanel>
                                             <TextBlock Text="思考模式"/>

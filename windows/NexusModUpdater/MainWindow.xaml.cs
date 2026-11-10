@@ -732,6 +732,23 @@ public partial class MainWindow : FluentWindow
 		NavBadge.Background = new SolidColorBrush(dark ? Color.FromRgb(0xF0, 0xA0, 0x50) : Color.FromRgb(0xC2, 0x5E, 0x00));
 		NavCount.Foreground = dark ? new SolidColorBrush(Color.FromArgb(0xE6, 0, 0, 0)) : Brushes.White;
 		NavSiteDot.Background = NavBadge.Background;
+		// 浅色时卡片、按钮、输入框用半透明的白（和网页一样），不然 WPF-UI 默认 70% 的白底压在亚克力上很突兀；深色用 WPF-UI 自己的
+		var lightFills = new (string Key, byte Alpha)[]
+		{
+			("CardBackgroundFillColorDefaultBrush", 0x33), ("CardBackgroundFillColorSecondaryBrush", 0x24),
+			("ControlFillColorDefaultBrush", 0x4D), ("ControlFillColorSecondaryBrush", 0x6B), ("ControlFillColorTertiaryBrush", 0x33)
+		};
+		foreach (var f in lightFills)
+		{
+			if (!dark && acrylic)
+			{
+				Resources[f.Key] = new SolidColorBrush(Color.FromArgb(f.Alpha, 0xFF, 0xFF, 0xFF));
+			}
+			else
+			{
+				Resources.Remove(f.Key);
+			}
+		}
 		NavDlBadge.Background = NavBadge.Background;
 		NavDlCount.Foreground = NavCount.Foreground;
 		Tint.Opacity = acrylic ? cfg.TintPercent / 100.0 : 0.0;
