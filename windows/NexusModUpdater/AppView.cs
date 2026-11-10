@@ -266,7 +266,11 @@ public sealed class AppView : Grid
 		{
 			if (!(ex is NexusException))
 			{
-				Logger.Log("页面调用 " + method + " 出错：" + ex);
+				if (method != "translate")
+				{
+					// 翻译失败已经在 Translator 里记过了
+					Logger.Log("页面调用 " + method + " 出错：" + ex);
+				}
 			}
 			reply["ok"] = false;
 			reply["error"] = ex.Message;

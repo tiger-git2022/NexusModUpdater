@@ -29,6 +29,10 @@ public static class Translator
 
 	private static readonly SemaphoreSlim Gate = new SemaphoreSlim(3);
 
+	private static string _lastError;
+
+	private static DateTime _lastErrorAt;
+
 	public static readonly (string Code, string Name)[] Languages =
 	{
 		("zh-Hans", "简体中文"), ("zh-Hant", "繁體中文"), ("en", "English"), ("ja", "日本語"), ("ko", "한국어")
@@ -254,7 +258,14 @@ public static class Translator
 		}
 		catch (Exception ex)
 		{
-			Logger.Log("翻译失败（" + engine + "）：" + ex.Message);
+			// 同样的错误一分钟内只记一次
+			string msg = "翻译失败（" + engine + "）：" + ex.Message;
+			if (msg != _lastError || DateTime.UtcNow - _lastErrorAt > TimeSpan.FromMinutes(1))
+			{
+				_lastError = msg;
+				_lastErrorAt = DateTime.UtcNow;
+				Logger.Log(msg);
+			}
 			throw new Exception("翻译失败：" + ex.Message);
 		}
 		lock (CacheLock)
@@ -464,12 +475,23 @@ public static class Translator
 		return list;
 	}
 
+	private const string MyMemoryQuota = "MyMemory 今天的免费额度用完了（在设置里填邮箱可提高额度，或改用 DeepSeek 等）";
+
+	private static DateTime _myMemoryBlockedUntil;
+
+	private static string _myMemoryBlockedEmail;
+
 	private static async Task<Dictionary<string, string>> MyMemoryAsync(List<string> texts, string target)
 	{
 		string email;
 		lock (Store.Lock)
 		{
 			email = (Store.Cfg.MyMemoryEmail ?? "").Trim();
+		}
+		// 今天的额度用完了就不再请求，到明天（UTC 零点额度重置）或换了邮箱再试
+		if (DateTime.UtcNow < _myMemoryBlockedUntil && email == _myMemoryBlockedEmail)
+		{
+			throw new HttpRequestException(MyMemoryQuota);
 		}
 		var map = new Dictionary<string, string>();
 		await Task.WhenAll(texts.Select(async t =>
@@ -499,7 +521,9 @@ public static class Translator
 					}
 					if ((int)resp.StatusCode == 429 || (j?.Value<bool?>("quotaFinished") ?? false))
 					{
-						throw new HttpRequestException("MyMemory 今天的免费额度用完了（在设置里填邮箱可提高额度，或改用 DeepSeek 等）");
+						_myMemoryBlockedUntil = DateTime.UtcNow.Date.AddDays(1);
+						_myMemoryBlockedEmail = email;
+						throw new HttpRequestException(MyMemoryQuota);
 					}
 					int status = j?["responseStatus"]?.Type == JTokenType.Integer ? j.Value<int>("responseStatus") : (int)resp.StatusCode;
 					string tr = j?["responseData"]?.Value<string>("translatedText");

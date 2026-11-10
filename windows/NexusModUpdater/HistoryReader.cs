@@ -24,6 +24,42 @@ public static class WebEnv
 	{
 		return _env ??= CoreWebView2Environment.CreateAsync(null, Paths.WebData);
 	}
+
+	/// <summary>
+	/// 网页登录了吗：看 N 网的登录 Cookie（nexusmods_session，过期了浏览器就不会返回）。要在界面线程调用。
+	/// 返回 null 表示查不了。
+	/// </summary>
+	public static async Task<bool?> IsLoggedInAsync()
+	{
+		if (HostHwnd == IntPtr.Zero)
+		{
+			return null;
+		}
+		CoreWebView2Controller ctl = null;
+		try
+		{
+			CoreWebView2Environment env = await GetAsync();
+			ctl = await env.CreateCoreWebView2ControllerAsync(HostHwnd);
+			ctl.IsVisible = false;
+			List<CoreWebView2Cookie> cookies = await ctl.CoreWebView2.CookieManager.GetCookiesAsync("https://www.nexusmods.com");
+			return cookies.Any(c => c.Name.StartsWith("nexusmods_session", StringComparison.OrdinalIgnoreCase) && c.Value != "");
+		}
+		catch (Exception ex)
+		{
+			Logger.Log("查看网页登录状态失败：" + ex.Message);
+			return null;
+		}
+		finally
+		{
+			try
+			{
+				ctl?.Close();
+			}
+			catch
+			{
+			}
+		}
+	}
 }
 
 public sealed class HistoryRow
@@ -241,14 +277,26 @@ public static class HistoryReader
 		{
 			string[] cells = r.Select(c => c.ToString()).ToArray();
 			string all = string.Join(" ", cells);
+			HistoryRow row;
+			bool plain = false;
 			Match m = ModLink.Match(all);
-			if (!m.Success || m.Groups[1].Value.Equals("users", StringComparison.OrdinalIgnoreCase))
+			if (m.Success && !m.Groups[1].Value.Equals("users", StringComparison.OrdinalIgnoreCase))
+			{
+				row = new HistoryRow { Domain = m.Groups[1].Value.ToLowerInvariant(), ModId = int.Parse(m.Groups[2].Value) };
+				Match a = Anchor.Match(all);
+				row.Name = a.Success ? Text(a.Groups[1].Value) : "";
+			}
+			else if (PlainRow(cells, out string domain, out int modId))
+			{
+				// 2026 年起的格式：每行是纯数据，没有链接。
+				// [图片, 名字, 最后下载, 上传者, 分类, 更新时间, 认可, 游戏ID, modId, 游戏域名, ...]
+				row = new HistoryRow { Domain = domain, ModId = modId, Name = cells.Length > 1 ? Text(cells[1]) : "" };
+				plain = true;
+			}
+			else
 			{
 				continue;
 			}
-			var row = new HistoryRow { Domain = m.Groups[1].Value.ToLowerInvariant(), ModId = int.Parse(m.Groups[2].Value) };
-			Match a = Anchor.Match(all);
-			row.Name = a.Success ? Text(a.Groups[1].Value) : "";
 			long dl = Cell(cells, 2);
 			long up = Cell(cells, 5);
 			if (dl == 0 || up == 0)
@@ -266,13 +314,19 @@ public static class HistoryReader
 			}
 			row.LastDownload = dl;
 			row.LastUpdate = up;
-			row.Game = cells.Length > 9 ? Text(cells[9]) : "";
+			// 新格式第 9 列是游戏域名，不是游戏名：留空，界面上用游戏列表里的名字
+			row.Game = plain || cells.Length <= 9 ? "" : Text(cells[9]);
 			row.Category = cells.Length > 4 ? Text(cells[4]) : "";
 			if (row.Name == "" && cells.Length > 0)
 			{
 				row.Name = Text(cells[0]);
 			}
 			result.Rows.Add(row);
+		}
+		if (rows.Count > 0 && result.Rows.Count == 0)
+		{
+			Logger.Log("下载记录有 " + rows.Count + " 条，但一条都没认出来（网页格式可能又变了）");
+			result.Note = "N 网下载记录的格式变了，读不出 mod（" + rows.Count + " 条）：请到 GitHub 反馈";
 		}
 	}
 
@@ -308,6 +362,45 @@ public static class HistoryReader
 			row.LastUpdate = times.Count > 1 ? times[1] : 0;
 			result.Rows.Add(row);
 		}
+	}
+
+	private static readonly Regex DomainText = new Regex("^[a-z][a-z0-9_]{1,63}$");
+
+	/// <summary>图片路径「modId/modId-时间-随机数.png」。</summary>
+	private static readonly Regex ImageId = new Regex(@"(?:^|/)(\d+)/\1-\d+");
+
+	/// <summary>
+	/// 纯数据行：[7] = 游戏 ID，[8] = mod ID，[9] = 游戏域名；位置变了就找「数字、数字、域名」连着的三格。
+	/// 图片路径里也带 mod ID，两边对得上才算（防止把游戏 ID 当成 mod ID）。
+	/// </summary>
+	private static bool PlainRow(string[] cells, out string domain, out int modId)
+	{
+		domain = "";
+		modId = 0;
+		int fromImage = 0;
+		foreach (string c in cells)
+		{
+			Match im = ImageId.Match(c ?? "");
+			if (im.Success)
+			{
+				fromImage = int.Parse(im.Groups[1].Value);
+				break;
+			}
+		}
+		for (int i = 2; i < cells.Length; i++)
+		{
+			if (DomainText.IsMatch(cells[i]) && int.TryParse(cells[i - 1], out int id) && id > 0 && int.TryParse(cells[i - 2], out _))
+			{
+				if (fromImage > 0 && fromImage != id)
+				{
+					continue;
+				}
+				domain = cells[i];
+				modId = id;
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static long Cell(string[] cells, int i) => i < cells.Length ? Time(cells[i]) : 0;

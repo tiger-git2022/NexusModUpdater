@@ -144,6 +144,30 @@ public partial class MainWindow : FluentWindow
 		{
 			BuildGames();
 			UpdateKeyState();
+			UpdateLoginState();
+		}
+	}
+
+	/// <summary>设置页的「网页登录」显示真实的登录状态。</summary>
+	private async void UpdateLoginState()
+	{
+		bool? logged = await WebEnv.IsLoggedInAsync();
+		if (logged == true)
+		{
+			string name;
+			lock (Store.Lock)
+			{
+				name = Store.St.UserName;
+			}
+			LoginState.Text = "已登录" + (string.IsNullOrEmpty(name) ? "" : "：" + name) + "（下载记录、评论都能用；登录状态保存在程序文件夹里）";
+			LoginButton.Content = "打开下载记录";
+		}
+		else
+		{
+			LoginState.Text = logged == false
+				? "还没登录：读取下载记录、看和发评论、非会员下载都需要在「N网」页登录一次（登录状态保存在程序文件夹里）"
+				: "读取下载记录、看和发评论、非会员下载都需要在「N网」页登录一次（登录状态保存在程序文件夹里）";
+			LoginButton.Content = "去登录";
 		}
 	}
 

@@ -124,10 +124,10 @@
                                 <ui:CardControl.Header>
                                     <StackPanel>
                                         <TextBlock Text="网页登录"/>
-                                        <TextBlock Text="读取下载记录、看和发评论、非会员下载都需要在「N网」页登录一次（登录状态保存在程序文件夹里）" Style="{StaticResource Muted}"/>
+                                        <TextBlock x:Name="LoginState" Text="读取下载记录、看和发评论、非会员下载都需要在「N网」页登录一次（登录状态保存在程序文件夹里）" Style="{StaticResource Muted}"/>
                                     </StackPanel>
                                 </ui:CardControl.Header>
-                                <ui:Button Content="去登录" Click="Login_Click"/>
+                                <ui:Button x:Name="LoginButton" Content="去登录" Click="Login_Click"/>
                             </ui:CardControl>
 
                             <TextBlock Text="已下载的 mod 从哪里来" Style="{StaticResource Section}"/>

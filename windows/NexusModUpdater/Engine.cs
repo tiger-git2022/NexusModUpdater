@@ -325,6 +325,20 @@ public static class Engine
 							e.LastDownload = Math.Max(e.LastDownload, r.LastDownload);
 							e.HistoryUpdate = Math.Max(e.HistoryUpdate, r.LastUpdate);
 						}
+						// 下载记录是完整的：不在里面的不再算「下载过」；只靠下载记录来的、也没装过忽略过的，从列表里去掉
+						// （也会清掉之前按错列读出来的条目）
+						if (h.Rows.Count > 0)
+						{
+							var seen = new HashSet<string>(h.Rows.Select(r => Store.Key(r.Domain, r.ModId)), StringComparer.OrdinalIgnoreCase);
+							foreach (ModEntry e in Store.St.Mods.Values.Where(m => m.InHistory && !seen.Contains(m.Key)).ToList())
+							{
+								e.InHistory = false;
+								if (!e.Tracked && !e.Local && !Store.St.Installs.ContainsKey(e.Key) && !Store.St.Ignores.ContainsKey(e.Key) && !Store.St.LocalFiles.ContainsKey(e.Key))
+								{
+									Store.St.Mods.Remove(e.Key);
+								}
+							}
+						}
 						Store.St.LastHistory = now;
 					}
 				}
@@ -534,7 +548,8 @@ public static class Engine
 			{
 				if (!Store.Ca.Mods.TryGetValue(e.Key, out ModInfo i))
 				{
-					return true;
+					// 下载记录里已经有名字和更新时间：没有更新迹象的先不查（下载记录可能上千条），打开详情时再查
+					return !e.InHistory || string.IsNullOrEmpty(e.Name) || e.HistoryUpdate == 0 || (!IsPerm(e.Key) && Signal(e) > Baseline(e) + Slack);
 				}
 				if (IsPerm(e.Key))
 				{
