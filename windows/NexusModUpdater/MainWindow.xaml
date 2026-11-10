@@ -169,15 +169,17 @@
                                 <ui:CardControl.Header>
                                     <StackPanel>
                                         <TextBlock Text="翻译服务"/>
-                                        <TextBlock Text="都是官方接口，需要自己的 Key：微软和 DeepL 有免费额度、国内可直连；OpenAI 兼容可以用 DeepSeek 或本地模型" Style="{StaticResource Muted}"/>
+                                        <TextBlock Text="免费翻译不用 Key 但每天有字数限制；填 DeepSeek 等的 Key 翻得更好、不限量" Style="{StaticResource Muted}"/>
                                     </StackPanel>
                                 </ui:CardControl.Header>
                                 <ComboBox x:Name="EngineBox" MinWidth="220" SelectionChanged="Translate_Changed">
-                                    <ComboBoxItem Content="不翻译 / 还没设置" Tag=""/>
+                                    <ComboBoxItem Content="免费翻译（MyMemory，不用 Key）" Tag="mymemory"/>
+                                    <ComboBoxItem Content="DeepSeek" Tag="deepseek"/>
                                     <ComboBoxItem Content="微软 Azure 翻译（每月 200 万字免费）" Tag="azure"/>
                                     <ComboBoxItem Content="DeepL（每月 50 万字免费）" Tag="deepl"/>
                                     <ComboBoxItem Content="谷歌云翻译" Tag="google"/>
-                                    <ComboBoxItem Content="OpenAI 兼容接口（DeepSeek、本地模型）" Tag="openai"/>
+                                    <ComboBoxItem Content="OpenAI 兼容接口（本地模型等）" Tag="openai"/>
+                                    <ComboBoxItem Content="关闭翻译" Tag="off"/>
                                 </ComboBox>
                             </ui:CardControl>
                             <ui:CardControl x:Name="KeyCard" Icon="{ui:SymbolIcon Key24}" Visibility="Collapsed">
@@ -191,6 +193,33 @@
                                     <ui:PasswordBox x:Name="TranslateKey" Width="300" Margin="0,0,8,0" LostFocus="OpenAi_LostFocus"/>
                                     <ui:Button Content="申请…" Click="KeyHelp_Click"/>
                                 </StackPanel>
+                            </ui:CardControl>
+                            <ui:CardControl x:Name="ThinkCard" Icon="{ui:SymbolIcon Brain24}" Visibility="Collapsed">
+                                <ui:CardControl.Header>
+                                    <StackPanel>
+                                        <TextBlock Text="深度思考"/>
+                                        <TextBlock Text="关闭：deepseek-chat，快、便宜，翻译用它就够了；打开：deepseek-reasoner，更慢更贵" Style="{StaticResource Muted}"/>
+                                    </StackPanel>
+                                </ui:CardControl.Header>
+                                <ui:ToggleSwitch x:Name="DeepSeekThinking" Click="LlmOption_Click"/>
+                            </ui:CardControl>
+                            <ui:CardControl x:Name="StreamCard" Icon="{ui:SymbolIcon TextBulletListLtr24}" Visibility="Collapsed">
+                                <ui:CardControl.Header>
+                                    <StackPanel>
+                                        <TextBlock Text="流式输出"/>
+                                        <TextBlock Text="一边生成一边返回：长文本不容易超时，写评论翻译时能看到文字一点点出来" Style="{StaticResource Muted}"/>
+                                    </StackPanel>
+                                </ui:CardControl.Header>
+                                <ui:ToggleSwitch x:Name="LlmStream" Click="LlmOption_Click"/>
+                            </ui:CardControl>
+                            <ui:CardControl x:Name="EmailCard" Icon="{ui:SymbolIcon Mail24}" Visibility="Collapsed">
+                                <ui:CardControl.Header>
+                                    <StackPanel>
+                                        <TextBlock Text="邮箱（可选）"/>
+                                        <TextBlock Text="MyMemory 免费额度：不填每天约 5000 字，填一个有效邮箱约 5 万字（只发给 MyMemory 用来计额度）" Style="{StaticResource Muted}"/>
+                                    </StackPanel>
+                                </ui:CardControl.Header>
+                                <ui:TextBox x:Name="MyMemoryEmail" Width="260" PlaceholderText="name@example.com" LostFocus="OpenAi_LostFocus"/>
                             </ui:CardControl>
                             <ui:CardControl x:Name="RegionCard" Icon="{ui:SymbolIcon Globe24}" Visibility="Collapsed">
                                 <ui:CardControl.Header>
@@ -215,10 +244,10 @@
                             <ui:CardControl Icon="{ui:SymbolIcon LocalLanguage24}" Header="翻译成">
                                 <ComboBox x:Name="Lang" MinWidth="200" SelectionChanged="Translate_Changed"/>
                             </ui:CardControl>
-                            <ui:CardControl Icon="{ui:SymbolIcon TextDescription24}" Header="自动翻译 mod 名字、简介、文件说明和更新日志">
+                            <ui:CardControl Icon="{ui:SymbolIcon TextDescription24}" Header="自动翻译外文的 mod 名字、简介、文件说明和更新日志（中文内容不翻）">
                                 <ui:ToggleSwitch x:Name="AutoTranslate" Click="Translate_Changed"/>
                             </ui:CardControl>
-                            <ui:CardControl Icon="{ui:SymbolIcon Comment24}" Header="自动翻译 N 网网页（评论区、简介等）">
+                            <ui:CardControl Icon="{ui:SymbolIcon Comment24}" Header="自动翻译 N 网网页上外文的评论和简介（中文内容不翻）">
                                 <ui:ToggleSwitch x:Name="TranslateSite" Click="Translate_Changed"/>
                             </ui:CardControl>
                             <ui:CardControl Icon="{ui:SymbolIcon Beaker24}">

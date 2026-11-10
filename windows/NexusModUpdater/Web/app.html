@@ -279,7 +279,8 @@ async function flushTr() {
       batch.forEach((t, j) => { if (r[j]) S.tr.set(t, r[j]); });
     } catch (e) {
       batch.forEach(t => S.tr.delete(t));
-      toast('翻译失败：' + e.message, 'error');
+      // 同一个错误一分钟内只提示一次
+      if (Date.now() - (S.trErrAt || 0) > 60000) { S.trErrAt = Date.now(); toast(e.message, 'error'); }
       return;
     }
     applyTr();
@@ -790,6 +791,7 @@ $('#trToggle').addEventListener('change', async e => {
 });
 function setTranslateScript() {
   if (!window.__nmuTr) return;
+  window.__nmuTr.target = S.status.lang || 'zh-Hans';
   if (S.trOn) window.__nmuTr.enable(); else window.__nmuTr.disable();
 }
 

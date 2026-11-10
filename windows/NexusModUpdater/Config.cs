@@ -34,8 +34,18 @@ public sealed class Config
 
 	public int TintPercent = 30;
 
-	/// <summary>azure / deepl / google / openai；空 = 还没设置</summary>
-	public string TranslateEngine = "";
+	/// <summary>mymemory（免费，不用 Key）/ deepseek / azure / deepl / google / openai / off</summary>
+	public string TranslateEngine = "mymemory";
+
+	public string MyMemoryEmail = "";
+
+	public string DeepSeekKey = "";
+
+	/// <summary>DeepSeek 深度思考（deepseek-reasoner）；翻译一般不需要。</summary>
+	public bool DeepSeekThinking = false;
+
+	/// <summary>大模型翻译用流式输出。</summary>
+	public bool LlmStream = true;
 
 	public string AzureKey = "";
 
@@ -94,10 +104,10 @@ public sealed class Config
 				Config c = JsonConvert.DeserializeObject<Config>(File.ReadAllText(path, Encoding.UTF8)) ?? new Config();
 				c.Games = new Dictionary<string, GameSetting>(c.Games ?? new Dictionary<string, GameSetting>(), StringComparer.OrdinalIgnoreCase);
 				c.TintPercent = Math.Max(0, Math.Min(100, c.TintPercent));
-				// 1.0.0 的 bing（非官方接口）已去掉
-				if (c.TranslateEngine == "bing" || c.TranslateEngine == "off")
+				// 1.0.0 的 bing（非官方接口）已去掉；1.0.1 的“还没设置”改成默认的免费翻译
+				if (string.IsNullOrEmpty(c.TranslateEngine) || c.TranslateEngine == "bing")
 				{
-					c.TranslateEngine = "";
+					c.TranslateEngine = "mymemory";
 				}
 				return c;
 			}

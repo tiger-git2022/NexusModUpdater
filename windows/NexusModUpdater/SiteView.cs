@@ -300,7 +300,7 @@ public sealed class SiteView : Grid
 	{
 		try
 		{
-			_web.CoreWebView2?.PostWebMessageAsJson(new JObject { ["nmu"] = _translate.IsChecked == true ? "trOn" : "trOff" }.ToString(Formatting.None));
+			_web.CoreWebView2?.PostWebMessageAsJson(new JObject { ["nmu"] = _translate.IsChecked == true ? "trOn" : "trOff", ["target"] = Store.Cfg.TargetLang }.ToString(Formatting.None));
 		}
 		catch
 		{
@@ -416,7 +416,8 @@ public sealed class SiteView : Grid
 		_composeState.Text = "翻译中…";
 		try
 		{
-			string en = await Translator.TranslateOneAsync(text, "en");
+			// 流式时一边收一边显示
+			string en = await Translator.TranslateOneAsync(text, "en", partial => Dispatcher.BeginInvoke((Action)(() => _composed.Text = partial)));
 			_composed.Text = en ?? "";
 			_composeState.Text = "";
 		}

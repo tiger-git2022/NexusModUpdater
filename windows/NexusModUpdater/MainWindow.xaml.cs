@@ -248,6 +248,9 @@ public partial class MainWindow : FluentWindow
 		OpenAiKey.Password = c.OpenAiKey;
 		OpenAiModel.Text = c.OpenAiModel;
 		AzureRegion.Text = c.AzureRegion;
+		MyMemoryEmail.Text = c.MyMemoryEmail;
+		DeepSeekThinking.IsChecked = c.DeepSeekThinking;
+		LlmStream.IsChecked = c.LlmStream;
 		UpdateTranslatePanels();
 		ThemeBox.SelectedIndex = c.Theme == "light" ? 1 : (c.Theme == "dark" ? 2 : 0);
 		BackdropBox.SelectedIndex = c.Backdrop == "mica" ? 1 : (c.Backdrop == "none" ? 2 : 0);
@@ -300,11 +303,19 @@ public partial class MainWindow : FluentWindow
 		Config c = Store.Cfg;
 		string engine = c.TranslateEngine;
 		OpenAiPanel.Visibility = engine == "openai" ? Visibility.Visible : Visibility.Collapsed;
-		KeyCard.Visibility = engine == "azure" || engine == "deepl" || engine == "google" ? Visibility.Visible : Visibility.Collapsed;
+		KeyCard.Visibility = engine == "azure" || engine == "deepl" || engine == "google" || engine == "deepseek" ? Visibility.Visible : Visibility.Collapsed;
 		RegionCard.Visibility = engine == "azure" ? Visibility.Visible : Visibility.Collapsed;
+		ThinkCard.Visibility = engine == "deepseek" ? Visibility.Visible : Visibility.Collapsed;
+		StreamCard.Visibility = engine == "deepseek" || engine == "openai" ? Visibility.Visible : Visibility.Collapsed;
+		EmailCard.Visibility = engine == "mymemory" ? Visibility.Visible : Visibility.Collapsed;
 		_keyEngine = engine;
 		switch (engine)
 		{
+		case "deepseek":
+			KeyTitle.Text = "DeepSeek API Key";
+			KeyHelp.Text = "在 DeepSeek 开放平台的 API keys 页面创建（按用量付费，翻译很便宜）";
+			TranslateKey.Password = c.DeepSeekKey;
+			break;
 		case "azure":
 			KeyTitle.Text = "微软 Azure 翻译 Key";
 			KeyHelp.Text = "在 Azure 门户创建「翻译器」资源（定价层选 F0 免费），在「密钥和终结点」里复制密钥 1";
@@ -334,9 +345,13 @@ public partial class MainWindow : FluentWindow
 			c.OpenAiKey = OpenAiKey.Password.Trim();
 			c.OpenAiModel = OpenAiModel.Text.Trim();
 			c.AzureRegion = AzureRegion.Text.Trim();
+			c.MyMemoryEmail = MyMemoryEmail.Text.Trim();
 			string key = TranslateKey.Password.Trim();
 			switch (_keyEngine)
 			{
+			case "deepseek":
+				c.DeepSeekKey = key;
+				break;
 			case "azure":
 				c.AzureKey = key;
 				break;
@@ -361,10 +376,21 @@ public partial class MainWindow : FluentWindow
 		_app.PostSettings();
 	}
 
+	private void LlmOption_Click(object sender, RoutedEventArgs e)
+	{
+		lock (Store.Lock)
+		{
+			Store.Cfg.DeepSeekThinking = DeepSeekThinking.IsChecked == true;
+			Store.Cfg.LlmStream = LlmStream.IsChecked == true;
+		}
+		Store.SaveConfig();
+	}
+
 	private void KeyHelp_Click(object sender, RoutedEventArgs e)
 	{
 		string url = Store.Cfg.TranslateEngine switch
 		{
+			"deepseek" => "https://platform.deepseek.com/api_keys",
 			"azure" => "https://learn.microsoft.com/zh-cn/azure/ai-services/translator/create-translator-resource",
 			"deepl" => "https://www.deepl.com/pro-api",
 			"google" => "https://console.cloud.google.com/apis/library/translate.googleapis.com",

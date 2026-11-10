@@ -3,11 +3,11 @@
 // 和程序通信：postMessage({nmu:'tr', id, texts}) → {nmu:'tr', id, result}；程序发 {nmu:'trOn'} / {nmu:'trOff'} 开关。
 (function () {
   if (window.__nmuTr || !window.chrome || !window.chrome.webview) return;
-  var S = window.__nmuTr = { on: false, seq: 0, pending: {}, queue: [], timer: 0, io: null, mo: null, scanTimer: 0, roots: null };
+  var S = window.__nmuTr = { on: false, seq: 0, pending: {}, queue: [], timer: 0, io: null, mo: null, scanTimer: 0, roots: null, target: 'zh-Hans' };
   var INLINE = { A: 1, ABBR: 1, B: 1, BDI: 1, BDO: 1, BR: 1, CITE: 1, CODE: 1, DATA: 1, EM: 1, FONT: 1, I: 1, KBD: 1, LABEL: 1, MARK: 1, Q: 1, S: 1, SAMP: 1, SMALL: 1, SPAN: 1, STRIKE: 1, STRONG: 1, SUB: 1, SUP: 1, TIME: 1, TT: 1, U: 1, VAR: 1, WBR: 1, IMG: 1 };
   var SKIP = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, TEXTAREA: 1, INPUT: 1, SELECT: 1, OPTION: 1, BUTTON: 1, SVG: 1, CANVAS: 1, IFRAME: 1, PRE: 1, CODE: 1, NAV: 1, HEADER: 1, FOOTER: 1, TEMPLATE: 1, HEAD: 1 };
-  var LETTERS = /[A-Za-zÀ-ɏЀ-ӿ]{2}/;
-  var CJK = /[぀-ヿ㐀-鿿가-힯]/g;
+  var LETTERS = /\p{L}/u;
+  var HAN = /\p{Script=Han}/gu, KANA = /[\p{Script=Hiragana}\p{Script=Katakana}]/gu, HANGUL = /\p{Script=Hangul}/gu, ANY = /\p{L}/gu;
 
   function css() {
     if (document.getElementById('nmu-tr-style')) return;
@@ -48,13 +48,17 @@
     return el;
   }
 
+  // 外文才翻：翻成中文时，以汉字为主的不翻；日文（有假名）、韩文、英文、俄文等都翻。其他目标语言交给程序判断
   function wanted(text) {
     var t = text.replace(/\s+/g, ' ').trim();
     if (t.length < 2 || t.length > 6000 || !LETTERS.test(t)) return false;
     if (/^(https?:\/\/|www\.)\S+$/.test(t)) return false;
-    var cjk = (t.match(CJK) || []).length, latin = (t.match(/[A-Za-z]/g) || []).length;
-    if (cjk > 0 && cjk * 2 >= latin) return false;
-    return true;
+    var n = function (re) { return (t.match(re) || []).length; };
+    var han = n(HAN), kana = n(KANA), hangul = n(HANGUL), all = n(ANY);
+    if (!/^zh/.test(S.target)) return all >= 2;
+    if (kana >= 2 || hangul >= 2) return true;
+    var foreign = all - han - kana - hangul;
+    return foreign >= 2 && han * 2 < foreign;
   }
 
   function scan(root) {
@@ -152,7 +156,7 @@
   window.chrome.webview.addEventListener('message', function (e) {
     var d = e.data;
     if (!d || typeof d !== 'object' || !d.nmu) return;
-    if (d.nmu === 'trOn') { if (document.body) enable(); else document.addEventListener('DOMContentLoaded', enable); }
+    if (d.nmu === 'trOn') { if (d.target) S.target = d.target; if (document.body) enable(); else document.addEventListener('DOMContentLoaded', enable); }
     else if (d.nmu === 'trOff') disable();
     else if (d.nmu === 'tr' && S.pending[d.id]) {
       var batch = S.pending[d.id];
