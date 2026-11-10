@@ -103,6 +103,21 @@ public static class Installer
 			{
 				source = Directory.GetDirectories(source)[0];
 			}
+			// 子文件夹模式下的文件夹名：作者在压缩包里起的文件夹名（UE4SS 之类按文件夹名加载的 mod 不能改名），
+			// 压缩包里是散的文件、或者顶层是 ~mods / Content 这类结构文件夹时用 mod 名；
+			// 替换旧版本时沿用旧文件夹的名字（你自己改过名也保留）
+			string unit = source;
+			string unitName = Safe(modName);
+			string[] topDirs = Directory.GetDirectories(tmp);
+			if (Directory.GetFiles(tmp).Length == 0 && topDirs.Length == 1 && !Structural(Path.GetFileName(topDirs[0])))
+			{
+				unit = topDirs[0];
+				unitName = Path.GetFileName(topDirs[0]);
+			}
+			if (old != null && Directory.Exists(old.Path) && PathEq(Path.GetDirectoryName(old.Path), folder))
+			{
+				unitName = Path.GetFileName(old.Path);
+			}
 			if (game.Mode == "root")
 			{
 				if (game.RemoveOld && old != null && old.Mode == "root")
@@ -125,7 +140,8 @@ public static class Installer
 			}
 			else
 			{
-				string dest = Path.Combine(folder, Safe(modName));
+				string dest = Path.Combine(folder, unitName);
+				source = unit;
 				if (game.RemoveOld && old != null && !string.IsNullOrEmpty(old.Path) && !PathEq(old.Path, dest) && !PathEq(old.Path, folder) && (Directory.Exists(old.Path) || File.Exists(old.Path)))
 				{
 					Recycle(old.Path);
@@ -245,7 +261,15 @@ public static class Installer
 		}
 	}
 
-	private static bool PathEq(string a, string b)
+	/// <summary>这些是游戏里的结构文件夹，不是 mod 自己的文件夹名。</summary>
+	private static readonly HashSet<string> StructuralNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+	{
+		"~mods", "mods", "logicmods", "content", "paks", "binaries", "win64", "data", "plugins", "bepinex", "ue4ss", "scripts", "textures", "meshes", "interface", "skse", "f4se", "nativepc", "natives", "reframework", "game"
+	};
+
+	private static bool Structural(string name) => StructuralNames.Contains(name ?? "");
+
+	public static bool PathEq(string a, string b)
 	{
 		try
 		{

@@ -261,7 +261,7 @@ public static class NexusApi
 
 	public static ModFiles ParseFiles(JObject o)
 	{
-		var mf = new ModFiles { FetchedAt = Store.Now };
+		var mf = new ModFiles { FetchedAt = Store.Now, HasManifests = true };
 		foreach (JObject f in (o["files"] as JArray)?.OfType<JObject>() ?? Enumerable.Empty<JObject>())
 		{
 			mf.Files.Add(new NexusFile
@@ -275,7 +275,8 @@ public static class NexusApi
 				Uploaded = f.Value<long?>("uploaded_timestamp") ?? 0,
 				SizeKb = f.Value<long?>("size_kb") ?? f.Value<long?>("size") ?? 0,
 				Description = WebUtility.HtmlDecode(f.Value<string>("description") ?? "").Replace("<br />", "\n"),
-				Primary = (f.Value<int?>("is_primary") ?? 0) != 0
+				Primary = (f.Value<int?>("is_primary") ?? 0) != 0,
+				Manifest = f.Value<string>("content_preview_link") ?? ""
 			});
 		}
 		foreach (JObject u in (o["file_updates"] as JArray)?.OfType<JObject>() ?? Enumerable.Empty<JObject>())

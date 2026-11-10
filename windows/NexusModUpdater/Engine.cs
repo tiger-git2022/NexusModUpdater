@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -131,6 +132,133 @@ public static class Engine
 		return Signal(e);
 	}
 
+	// ---- 按文件判断：知道你手上有哪些文件时，只看这些文件有没有新版本 ----
+
+	/// <summary>你手上有的文件 ID：本程序装的、mod 文件夹里认出来的。</summary>
+	private static HashSet<int> OwnedIdsLocked(ModEntry e, ModFiles files)
+	{
+		var ids = new HashSet<int>();
+		string prefix = e.Key + "#";
+		foreach (KeyValuePair<string, InstallRecord> kv in Store.St.InstallsByFile)
+		{
+			if (kv.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && kv.Value.FileId > 0)
+			{
+				ids.Add(kv.Value.FileId);
+			}
+		}
+		if (Store.St.Installs.TryGetValue(e.Key, out InstallRecord rec) && rec.FileId > 0)
+		{
+			ids.Add(rec.FileId);
+		}
+		if (Store.St.Found.TryGetValue(e.Key, out LocalFound found) && found.FileId > 0)
+		{
+			ids.Add(found.FileId);
+		}
+		if (files != null && Store.St.LocalFileNames.TryGetValue(e.Key, out string localName) && !string.IsNullOrEmpty(localName))
+		{
+			string bare = BareName(localName);
+			NexusFile byName = files.Files.FirstOrDefault(f => string.Equals(BareName(f.FileName), bare, StringComparison.OrdinalIgnoreCase));
+			if (byName != null)
+			{
+				ids.Add(byName.FileId);
+			}
+		}
+		return ids;
+	}
+
+	private static string BareName(string n) => System.Text.RegularExpressions.Regex.Replace(n ?? "", @"\.(zip|7z|rar)$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+	/// <summary>
+	/// 你手上这个文件的新版本：先沿作者设置的「旧文件 → 新文件」更新链找，再找同名的、更新的现行文件。
+	/// 返回 null：这个文件就是最新的。lost = 文件已经下架了，又找不到对应的新文件。
+	/// </summary>
+	private static NexusFile SuccessorLocked(NexusFile owned, ModFiles files, out bool lost)
+	{
+		lost = false;
+		int id = owned.FileId;
+		var seen = new HashSet<int>();
+		while (seen.Add(id))
+		{
+			FileUpdateLink next = files.Updates.Where(u => u.OldId == id).OrderByDescending(u => u.Uploaded).FirstOrDefault();
+			if (next == null)
+			{
+				break;
+			}
+			id = next.NewId;
+		}
+		NexusFile chained = files.Files.FirstOrDefault(f => f.FileId == id && f.Current);
+		if (chained != null && chained.FileId != owned.FileId)
+		{
+			return chained;
+		}
+		NexusFile same = files.Files.Where(f => f.Current && f.FileId != owned.FileId && string.Equals(f.Name, owned.Name, StringComparison.OrdinalIgnoreCase) && f.Uploaded > owned.Uploaded + Slack)
+			.OrderByDescending(f => f.Uploaded).FirstOrDefault();
+		if (same != null)
+		{
+			return same;
+		}
+		lost = !owned.Current;
+		return null;
+	}
+
+	/// <summary>
+	/// 知道你手上有哪些文件、文件列表也是新的时：owned = 你的文件，targets = 要更新成的新文件（已经去掉「标记为最新」之前的）。
+	/// 返回 false 就按老办法（下载时间之后有没有新文件）判断。
+	/// </summary>
+	private static bool KnownLocked(ModEntry e, out ModFiles files, out List<NexusFile> owned, out List<NexusFile> targets)
+	{
+		owned = null;
+		targets = null;
+		if (!Store.Ca.Files.TryGetValue(e.Key, out files) || files.Files.Count == 0)
+		{
+			return false;
+		}
+		long sig = e.HistoryUpdate;
+		if (Store.Ca.FileActivity.TryGetValue(e.Key, out long fa))
+		{
+			sig = Math.Max(sig, fa);
+		}
+		if (files.FetchedAt + Slack < sig)
+		{
+			return false;
+		}
+		HashSet<int> ids = OwnedIdsLocked(e, files);
+		ModFiles fs = files;
+		owned = files.Files.Where(f => ids.Contains(f.FileId)).ToList();
+		if (owned.Count == 0)
+		{
+			return false;
+		}
+		var t = new List<NexusFile>();
+		foreach (NexusFile o in owned)
+		{
+			NexusFile next = SuccessorLocked(o, fs, out bool lost);
+			if (lost)
+			{
+				return false;
+			}
+			if (next != null && next.Uploaded > e.MarkedLatest + Slack && !t.Contains(next) && !ids.Contains(next.FileId))
+			{
+				t.Add(next);
+			}
+		}
+		targets = t;
+		return true;
+	}
+
+	/// <summary>你的版本、最新、有没有更新。</summary>
+	private static (long Baseline, long Latest, bool Has) EvalLocked(ModEntry e)
+	{
+		if (KnownLocked(e, out _, out List<NexusFile> owned, out List<NexusFile> targets))
+		{
+			long mine = owned.Max(f => f.Uploaded);
+			return (mine, targets.Count > 0 ? targets.Max(f => f.Uploaded) : mine, targets.Count > 0);
+		}
+		long b = Baseline(e);
+		long l = Latest(e);
+		return (b, l, l > b + Slack);
+	}
+
 	private static string IgnoreState(ModEntry e, long latest, out bool active)
 	{
 		active = false;
@@ -156,10 +284,9 @@ public static class Engine
 			{
 				Store.Ca.Mods.TryGetValue(e.Key, out ModInfo info);
 				Store.St.Installs.TryGetValue(e.Key, out InstallRecord rec);
-				long baseline = Baseline(e);
-				long latest = Latest(e);
+				(long baseline, long latest, bool has) = EvalLocked(e);
 				string ignore = IgnoreState(e, latest, out bool ignoreActive);
-				bool hasUpdate = latest > baseline + Slack && (info == null || info.Available);
+				bool hasUpdate = has && (info == null || info.Available);
 				var sources = new JArray();
 				if (e.InHistory)
 				{
@@ -415,6 +542,22 @@ public static class Engine
 			if (hasKey)
 			{
 				await RefreshFromApiAsync(notes, domain).ConfigureAwait(false);
+				if (domain != null && cfg.ScanFolders)
+				{
+					string folder;
+					lock (Store.Lock)
+					{
+						folder = Store.Cfg.Game(domain).Folder;
+					}
+					try
+					{
+						await LocalMatcher.MatchAsync(domain, folder, s => Progress(s), notes).ConfigureAwait(false);
+					}
+					catch (Exception ex)
+					{
+						Logger.Log("核对 mod 文件夹失败：" + ex);
+					}
+				}
 			}
 			lock (Store.Lock)
 			{
@@ -695,7 +838,7 @@ public static class Engine
 				}
 				else
 				{
-					Store.St.Ignores[key] = new IgnoreEntry { Kind = kind == "perm" ? "perm" : "temp", UntilUpdate = Latest(e), At = Store.Now };
+					Store.St.Ignores[key] = new IgnoreEntry { Kind = kind == "perm" ? "perm" : "temp", UntilUpdate = EvalLocked(e).Latest, At = Store.Now };
 				}
 			}
 		}
@@ -712,7 +855,9 @@ public static class Engine
 			{
 				if (Store.St.Mods.TryGetValue(key, out ModEntry e))
 				{
-					e.LastDownload = Math.Max(e.LastDownload, Math.Max(Store.Now, Latest(e)));
+					long latest = EvalLocked(e).Latest;
+					e.MarkedLatest = Math.Max(e.MarkedLatest, latest);
+					e.LastDownload = Math.Max(e.LastDownload, Math.Max(Store.Now, latest));
 					if (Store.St.Ignores.TryGetValue(key, out IgnoreEntry ig) && ig.Kind == "temp")
 					{
 						Store.St.Ignores.Remove(key);
@@ -847,7 +992,7 @@ public static class Engine
 		{
 			Store.St.Mods.TryGetValue(key, out ModEntry e);
 			Store.St.Installs.TryGetValue(key, out InstallRecord rec);
-			long baseline = e != null ? Baseline(e) : 0;
+			(long baseline, long latestNow, bool hasNow) = e != null ? EvalLocked(e) : (0L, 0L, false);
 			if (info != null)
 			{
 				o["name"] = info.Name;
@@ -873,9 +1018,10 @@ public static class Engine
 			o["lastDownload"] = e?.LastDownload ?? 0;
 			if (e != null)
 			{
-				o["ignore"] = IgnoreState(e, Latest(e), out bool active);
+				o["ignore"] = IgnoreState(e, latestNow, out bool active);
 				o["ignoreActive"] = active;
-				o["latest"] = Latest(e);
+				o["latest"] = latestNow;
+				o["hasUpdate"] = hasNow;
 			}
 			if (rec != null)
 			{
@@ -886,7 +1032,17 @@ public static class Engine
 			o["mode"] = gs?.Mode ?? "subfolder";
 			if (files != null)
 			{
-				NexusFile pick = e != null ? PickLocked(e, files, out _) : null;
+				List<NexusFile> picks = e != null ? PlanLocked(e, files, out _, out _) : new List<NexusFile>();
+				HashSet<int> mine = e != null ? OwnedIdsLocked(e, files) : new HashSet<int>();
+				bool known = e != null && KnownLocked(e, out _, out _, out _);
+				o["knownFiles"] = known;
+				// 你没装的文件有更新：只提示，不算你的更新
+				if (known)
+				{
+					long ownedMax = files.Files.Where(f => mine.Contains(f.FileId)).Select(f => f.Uploaded).DefaultIfEmpty(0).Max();
+					o["otherNew"] = new JArray(files.Files.Where(f => f.Current && !mine.Contains(f.FileId) && picks.All(p => p.FileId != f.FileId) && f.Uploaded > ownedMax + Slack)
+						.OrderBy(f => CatOrder(f.CategoryId)).Select(f => (f.CategoryId == 1 ? "主文件" : f.Category == "" ? "文件" : CatName(f.CategoryId)) + "「" + f.Name + "」"));
+				}
 				var arr = new JArray();
 				foreach (NexusFile f in files.Files.OrderBy(f => CatOrder(f.CategoryId)).ThenByDescending(f => f.Uploaded))
 				{
@@ -903,8 +1059,8 @@ public static class Engine
 						["description"] = f.Description,
 						["primary"] = f.Primary,
 						["isNew"] = baseline > 0 && f.Uploaded > baseline + Slack,
-						["recommended"] = pick != null && pick.FileId == f.FileId,
-						["installed"] = rec != null && rec.FileId == f.FileId
+						["recommended"] = picks.Any(p => p.FileId == f.FileId),
+						["installed"] = mine.Contains(f.FileId)
 					});
 				}
 				o["files"] = arr;
@@ -915,6 +1071,8 @@ public static class Engine
 		Changed();
 		return o;
 	}
+
+	private static string CatName(int c) => c switch { 1 => "主文件", 2 => "更新补丁", 3 => "附加文件", 4 => "旧版本", 5 => "其他文件", 7 => "已归档", _ => "文件" };
 
 	private static int CatOrder(int c) => c switch { 1 => 0, 2 => 1, 3 => 2, 5 => 3, 4 => 4, 7 => 5, _ => 6 };
 
@@ -933,67 +1091,98 @@ public static class Engine
 
 	// ---- 选文件、下载 ----
 
-	/// <summary>更新时下哪个文件：沿着「旧文件 → 新文件」的更新链找；否则唯一的主文件；否则上次之后唯一更新过的主文件。</summary>
-	private static NexusFile PickLocked(ModEntry e, ModFiles files, out string reason)
+	/// <summary>
+	/// 更新时下哪些文件。
+	/// 知道你手上有哪些文件：每个文件各自的新版本（你没装的文件不管）。
+	/// 不知道：你下载之后只出了一个新文件就下它；只有一个文件就下它；否则列出来让你选（choices）。
+	/// </summary>
+	private static List<NexusFile> PlanLocked(ModEntry e, ModFiles files, out List<NexusFile> choices, out string reason)
 	{
+		choices = null;
 		reason = "";
-		List<NexusFile> cur = files.Files.Where(f => f.Current).ToList();
+		if (KnownLocked(e, out _, out _, out List<NexusFile> targets))
+		{
+			if (targets.Count == 0)
+			{
+				reason = "你装的文件已经是最新的了";
+			}
+			return targets;
+		}
+		List<NexusFile> cur = files.Files.Where(f => f.Current).OrderBy(f => CatOrder(f.CategoryId)).ThenByDescending(f => f.Uploaded).ToList();
 		if (cur.Count == 0)
 		{
 			reason = "这个 mod 现在没有可下载的文件";
-			return null;
+			return new List<NexusFile>();
 		}
-		Store.St.Installs.TryGetValue(e.Key, out InstallRecord rec);
-		Store.St.LocalFileNames.TryGetValue(e.Key, out string localName);
-		int id = rec?.FileId ?? 0;
-		if (id == 0 && !string.IsNullOrEmpty(localName))
-		{
-			id = files.Files.FirstOrDefault(f => string.Equals(f.FileName, localName, StringComparison.OrdinalIgnoreCase))?.FileId ?? 0;
-			if (id == 0)
-			{
-				id = files.Updates.FirstOrDefault(u => string.Equals(u.OldName, localName, StringComparison.OrdinalIgnoreCase))?.OldId ?? 0;
-			}
-		}
-		if (id != 0)
-		{
-			var seen = new HashSet<int>();
-			while (seen.Add(id))
-			{
-				FileUpdateLink next = files.Updates.Where(u => u.OldId == id).OrderByDescending(u => u.Uploaded).FirstOrDefault();
-				if (next == null)
-				{
-					break;
-				}
-				id = next.NewId;
-			}
-			NexusFile chained = cur.FirstOrDefault(f => f.FileId == id);
-			if (chained != null)
-			{
-				return chained;
-			}
-		}
-		if (rec != null && !string.IsNullOrEmpty(rec.FileTitle))
-		{
-			NexusFile same = cur.Where(f => f.Name == rec.FileTitle).OrderByDescending(f => f.Uploaded).FirstOrDefault();
-			if (same != null)
-			{
-				return same;
-			}
-		}
-		long baseline = Baseline(e);
-		List<NexusFile> mains = cur.Where(f => f.CategoryId == 1).OrderByDescending(f => f.Uploaded).ToList();
-		if (mains.Count == 1)
-		{
-			return mains[0];
-		}
-		List<NexusFile> pool = mains.Count > 0 ? mains : cur;
-		List<NexusFile> fresh = pool.Where(f => f.Uploaded > baseline + Slack).ToList();
+		long baseline = Math.Max(Baseline(e), e.MarkedLatest);
+		List<NexusFile> fresh = cur.Where(f => f.Uploaded > baseline + Slack).ToList();
 		if (fresh.Count == 1)
 		{
-			return fresh[0];
+			return fresh;
 		}
-		reason = "有 " + pool.Count + " 个" + (mains.Count > 0 ? "主文件" : "文件") + "，请在详情里选择要下载哪一个";
-		return null;
+		if (fresh.Count == 0 && cur.Count == 1)
+		{
+			return cur;
+		}
+		choices = cur;
+		reason = fresh.Count > 1 ? "你下载之后有 " + fresh.Count + " 个文件更新了，不知道你用的是哪个，请选择要下载的文件" : "有 " + cur.Count + " 个文件，请选择要下载哪一个";
+		return new List<NexusFile>();
+	}
+
+	/// <summary>装 target 时要替换掉的旧版本：它的前一个版本（本程序装的，或 mod 文件夹里认出来的）。找不到就返回 null（不删任何东西）。</summary>
+	public static InstallRecord OldFor(string domain, int modId, int targetFileId)
+	{
+		string key = Store.Key(domain, modId);
+		lock (Store.Lock)
+		{
+			Store.Ca.Files.TryGetValue(key, out ModFiles files);
+			NexusFile target = files?.Files.FirstOrDefault(f => f.FileId == targetFileId);
+			var cands = new List<InstallRecord>();
+			string prefix = key + "#";
+			cands.AddRange(Store.St.InstallsByFile.Where(kv => kv.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).Select(kv => kv.Value));
+			if (Store.St.Installs.TryGetValue(key, out InstallRecord rec) && !cands.Contains(rec))
+			{
+				cands.Add(rec);
+			}
+			if (Store.St.Found.TryGetValue(key, out LocalFound found) && !string.IsNullOrEmpty(found.Path) && cands.All(c => !Installer.PathEq(c.Path, found.Path)))
+			{
+				cands.Add(new InstallRecord { Domain = domain, ModId = modId, FileId = found.FileId, FileName = found.FileName, Path = found.Path, Mode = Directory.Exists(found.Path) ? "subfolder" : "archive" });
+			}
+			if (cands.Count == 0)
+			{
+				return null;
+			}
+			if (target == null || files == null)
+			{
+				// 不知道要装的是哪个文件：只有一个旧版本时替换它（以前的做法）
+				return cands.Count == 1 ? cands[0] : null;
+			}
+			foreach (InstallRecord c in cands.Where(c => c.FileId > 0))
+			{
+				NexusFile cf = files.Files.FirstOrDefault(f => f.FileId == c.FileId);
+				if (cf == null)
+				{
+					continue;
+				}
+				if (cf.FileId == target.FileId || string.Equals(cf.Name, target.Name, StringComparison.OrdinalIgnoreCase) || SuccessorLocked(cf, files, out _)?.FileId == target.FileId)
+				{
+					return c;
+				}
+			}
+			// 只认出了文件夹名的：新文件的压缩包里也是这个文件夹，就是同一个东西
+			if (target.Manifest != "" && Store.Ca.Manifests.TryGetValue(target.Manifest, out Manifest man))
+			{
+				foreach (InstallRecord c in cands.Where(c => c.FileId == 0 && Directory.Exists(c.Path)))
+				{
+					string dir = Path.GetFileName(c.Path);
+					if (man.Files.Any(f => f.P.Split('/')[0].Equals(dir, StringComparison.OrdinalIgnoreCase) && f.P.Contains("/")))
+					{
+						return c;
+					}
+				}
+			}
+			return null;
+		}
 	}
 
 	public static async Task<bool> EnsureFolderAsync(string domain)
@@ -1040,23 +1229,44 @@ public static class Engine
 					continue;
 				}
 				ModFiles files = await FilesAsync(e.Domain, e.ModId, true).ConfigureAwait(false);
-				NexusFile pick;
+				List<NexusFile> picks;
+				List<NexusFile> choices;
 				string reason;
+				long baseline;
 				lock (Store.Lock)
 				{
-					pick = PickLocked(e, files, out reason);
+					picks = PlanLocked(e, files, out choices, out reason);
+					baseline = Math.Max(Baseline(e), e.MarkedLatest);
 				}
-				if (pick == null)
+				if (picks.Count > 0)
 				{
-					r["ok"] = false;
-					r["needChoice"] = true;
-					r["message"] = reason;
+					foreach (NexusFile pick in picks)
+					{
+						Downloader.Enqueue(e.Domain, e.ModId, pick, ModName(e.Domain, e.ModId));
+					}
+					r["ok"] = true;
+					r["message"] = string.Join("、", picks.Select(p => p.Name + " " + p.Version));
 				}
 				else
 				{
-					Downloader.Enqueue(e.Domain, e.ModId, pick, ModName(e.Domain, e.ModId));
-					r["ok"] = true;
-					r["message"] = pick.Name + " " + pick.Version;
+					r["ok"] = false;
+					r["message"] = reason;
+					if (choices != null)
+					{
+						r["needChoice"] = true;
+						r["domain"] = e.Domain;
+						r["modId"] = e.ModId;
+						r["choices"] = new JArray(choices.Select(f => new JObject
+						{
+							["fileId"] = f.FileId,
+							["name"] = f.Name,
+							["version"] = f.Version,
+							["category"] = CatName(f.CategoryId),
+							["uploaded"] = f.Uploaded,
+							["sizeKb"] = f.SizeKb,
+							["isNew"] = f.Uploaded > baseline + Slack
+						}));
+					}
 				}
 			}
 			catch (Exception ex)
@@ -1095,12 +1305,24 @@ public static class Engine
 	}
 
 	/// <summary>下载安装完成：记下来，这个 mod 就算是最新的了。</summary>
-	public static void OnInstalled(InstallRecord rec)
+	public static void OnInstalled(InstallRecord rec, InstallRecord old = null)
 	{
 		lock (Store.Lock)
 		{
 			string key = Store.Key(rec.Domain, rec.ModId);
 			Store.St.Installs[key] = rec;
+			if (old != null && old.FileId > 0 && old.FileId != rec.FileId)
+			{
+				Store.St.InstallsByFile.Remove(key + "#" + old.FileId);
+			}
+			if (rec.FileId > 0)
+			{
+				Store.St.InstallsByFile[key + "#" + rec.FileId] = rec;
+			}
+			if (old != null && Store.St.Found.TryGetValue(key, out LocalFound found) && Installer.PathEq(found.Path, old.Path))
+			{
+				Store.St.Found.Remove(key);
+			}
 			if (!Store.St.Mods.TryGetValue(key, out ModEntry e))
 			{
 				e = new ModEntry { Domain = rec.Domain, ModId = rec.ModId, FirstSeen = Store.Now, Name = ModName(rec.Domain, rec.ModId) };

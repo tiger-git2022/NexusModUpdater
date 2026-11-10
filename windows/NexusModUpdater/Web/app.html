@@ -84,6 +84,14 @@ a:hover { text-decoration: underline; }
 .modal input { width: 100%; margin: 10px 0 14px; font: inherit; color: var(--fg); background: var(--ctl); border: 1px solid var(--ctlline); border-radius: 4px; padding: 6px 10px; outline: none; }
 .modal input:focus { border-bottom: 2px solid var(--accent); padding-bottom: 5px; }
 .modal .btns { display: flex; justify-content: flex-end; gap: 8px; }
+.modal .btns .grow { flex: 1; }
+.modal.wide { width: 620px; max-width: calc(100vw - 40px); }
+.picks { margin: 12px 0 14px; max-height: 50vh; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+.pick-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.pick-row:last-child { border-bottom: 0; }
+.pick-row:hover { background: var(--hover); }
+.pick-row .pn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.pick-row .muted { font-weight: 400; font-size: 12px; white-space: nowrap; }
 #top { display: flex; align-items: center; gap: 8px; padding: 10px 18px 8px; flex-wrap: nowrap; flex-shrink: 0; }
 .tabs { display: flex; gap: 4px; flex-shrink: 0; }
 .tab { border: 0; background: transparent; padding: 6px 12px; border-radius: 4px; color: var(--fg2); position: relative; }
@@ -110,8 +118,14 @@ a:hover { text-decoration: underline; }
 .progress.indet > i { width: 30% !important; animation: indet 1.2s ease-in-out infinite; }
 @keyframes indet { 0% { left: -30%; } 100% { left: 100%; } }
 
-#body { display: grid; grid-template-columns: minmax(0, 1fr) 440px; min-height: 0; flex: 1; }
-#body.nodetail { grid-template-columns: minmax(0, 1fr) 0; }
+#body { display: grid; grid-template-columns: minmax(0, 1fr) 8px var(--dw, 440px); min-height: 0; flex: 1; }
+#body.nodetail { grid-template-columns: minmax(0, 1fr) 0 0; }
+#split { cursor: col-resize; position: relative; }
+#split::after { content: ""; position: absolute; left: 3px; top: 0; bottom: 12px; width: 2px; border-radius: 1px; background: transparent; transition: background .15s; }
+#split:hover::after, #split.drag::after { background: var(--accent); }
+#body.nodetail #split { display: none; }
+body.resizing { cursor: col-resize; }
+body.resizing * { user-select: none !important; }
 #main { overflow: auto; padding: 0 12px 30px 18px; position: relative; }
 #detail { overflow: auto; margin: 0 12px 12px 0; border: 1px solid var(--line); border-radius: 8px; background: var(--card2); }
 #body.nodetail #detail { display: none; }
@@ -228,6 +242,7 @@ a:hover { text-decoration: underline; }
   <div id="notice"></div>
   <div id="body" class="nodetail" hidden>
     <div id="main"></div>
+    <div id="split" title="拖动调整宽度（双击恢复）"></div>
     <div id="detail"></div>
   </div>
   <div id="gmain" hidden></div>
@@ -402,7 +417,7 @@ function rowHtml(m) {
   const tName = tr(m.name);
   const sum = m.summary ? trSpan(m.summary.split('\n')[0]) : '<span class="muted">' + (m.hasInfo ? '' : '（还没查到详细信息）') + '</span>';
   const chips = [];
-  if (m.hasUpdate) chips.push('<span class="chip new">有更新</span>');
+  if (m.hasUpdate && !(m.available && !m.ignoreActive)) chips.push('<span class="chip new">有更新</span>');
   if (!m.available) chips.push('<span class="chip bad">' + (m.status === 'removed' ? '已删除' : '不可用') + '</span>');
   const ig = igLabel(m);
   if (ig) chips.push(ig);
@@ -419,6 +434,9 @@ function rowHtml(m) {
     '<div class="meta">' + (m.author ? '<span>' + esc(m.author) + '</span>' : '') + (m.version ? '<span>v' + esc(m.version) + '</span>' : '') + when + '</div></div>' +
     '<div class="acts">' + chips.join('') +
     (m.hasUpdate && m.available ? '<button class="small primary act-update"' + (m.busy ? ' disabled' : '') + '>更新</button>' : '') +
+    (m.hasUpdate && !m.ignoreActive ? '<button class="small act-mark" title="不下载，当作已经是最新的">已是最新</button>' : '') +
+    (m.ignore === 'none' && m.hasUpdate ? '<button class="small ghost act-perm" title="再也不提醒这个 mod 的更新">永久忽略</button>' : '') +
+    (m.ignore !== 'none' ? '<button class="small act-unignore">取消忽略</button>' : '') +
     '<button class="small ghost act-menu" title="更多">⋯</button></div></div>';
 }
 
@@ -705,8 +723,11 @@ function renderDetail() {
     (d.installed ? '<button data-path="' + esc(d.installed.path) + '">打开已装位置</button>' : (d.folder ? '<button data-folder="' + esc(d.domain) + '">打开 mod 文件夹</button>' : '<button data-choose="' + esc(d.domain) + '">设置 mod 文件夹</button>')) +
     '<button id="dIgnore">忽略 ▾</button><button class="ghost" id="dRefresh" title="重新获取">刷新</button></div>';
   const st = [];
-  if (d.lastDownload || d.baseline) st.push('你的版本：<b>' + (d.installed ? esc(d.installed.version || d.installed.fileName) + '，' : '') + '下载于 ' + date(d.lastDownload || d.baseline) + '</b>');
+  const mineFiles = (d.files || []).filter(f => f.installed);
+  if (mineFiles.length) st.push('你装的文件：<b>' + mineFiles.map(f => esc(f.name + ' ' + (f.version || ''))).join('、') + '</b>');
+  else if (d.lastDownload || d.baseline) st.push('你的版本：<b>' + (d.installed ? esc(d.installed.version || d.installed.fileName) + '，' : '') + '下载于 ' + date(d.lastDownload || d.baseline) + '</b>' + (d.files && !d.knownFiles ? '<br><span class="muted">不知道你用的是哪个文件，按下载时间判断；设置 mod 文件夹后程序会核对你装的是哪个</span>' : ''));
   if (d.latest) st.push('最新文件：<b>' + date(d.latest) + '</b>' + (m.hasUpdate ? ' <span class="chip new">有更新</span>' : ' <span class="chip ok">已是最新</span>'));
+  if (d.otherNew && d.otherNew.length) st.push('<span class="muted">你没装的' + esc(d.otherNew.join('、')) + ' 也更新了（不算你的更新）</span>');
   if (d.ignore && d.ignore !== 'none') st.push(d.ignore === 'perm' ? '已永久忽略' : (d.ignoreActive ? '已暂时忽略这次更新' : '暂时忽略过，但又有了新更新'));
   if (d.available === false) st.push('<span class="err">这个 mod 已经被删除或隐藏</span>');
   (d.errors || []).forEach(e => st.push('<span class="err">' + esc(e) + '</span>'));
@@ -735,7 +756,7 @@ function detailBody(d) {
       const chips = [];
       if (f.recommended) chips.push('<span class="chip acc">更新会下载这个</span>');
       if (f.isNew) chips.push('<span class="chip new">新</span>');
-      if (f.installed) chips.push('<span class="chip ok">已装</span>');
+      if (f.installed) chips.push('<span class="chip ok">你装的</span>');
       if (f.primary) chips.push('<span class="chip">默认</span>');
       h += '<div class="file' + (f.recommended ? ' rec' : '') + '"><div class="ft"><div class="fn"><p style="margin:0">' + esc(f.name) + '</p></div>' +
         '<button class="small' + (f.recommended ? ' primary' : '') + '" data-dl="' + f.fileId + '">下载</button></div>' +
@@ -825,8 +846,6 @@ function modMenu(m, x, y) {
   items.push(['N网页面', () => call('openSite', { url })]);
   items.push(['用系统浏览器打开', () => call('openExternal', { url })]);
   if (m.installed) items.push(['打开已装位置', () => call('openFolder', { path: m.installed.path }).catch(e => toast(e.message, 'error'))]);
-  items.push('-');
-  items.push(['从列表里移除', () => call('remove', { keys: [m.key] })]);
   menu(x, y, items);
 }
 
@@ -847,11 +866,43 @@ async function doUpdate(keys) {
   const bad = r.filter(x => !x.ok && !x.needChoice);
   if (ok) toast('已加入下载：' + ok + ' 个' + (S.status.premium ? '' : '（非会员需要在「N网」页逐个点 Slow download）'), 'ok');
   bad.forEach(x => toast(x.name + '：' + x.message, 'error'));
-  if (choose.length) {
-    toast(choose.map(x => x.name).join('、') + '：' + choose[0].message, 'error');
-    S.dtab = 'files';
-    openDetail(choose[0].key);
+  // 不知道你用的是哪个文件：一个一个弹出来让你选
+  for (const x of choose) {
+    if (x.choices && x.choices.length) await chooseFiles(x);
+    else { toast(x.name + '：' + x.message, 'error'); S.dtab = 'files'; openDetail(x.key); }
   }
+}
+
+function chooseFiles(x) {
+  return new Promise(resolve => {
+    const bg = document.createElement('div');
+    bg.className = 'modal-bg';
+    bg.innerHTML = '<div class="modal wide"><h3>' + esc(x.name) + '：选择要下载的文件</h3><div class="muted">' + esc(x.message) + '。标「新」的是你下载之后更新过的。</div>' +
+      '<div class="picks">' + x.choices.map(f =>
+        '<label class="pick-row"><input type="checkbox" value="' + f.fileId + '"><span class="pn">' + esc(f.name) + ' <span class="muted">' + esc(f.version || '') + '</span></span>' +
+        '<span class="chip">' + esc(f.category) + '</span>' + (f.isNew ? '<span class="chip new">新</span>' : '') +
+        '<span class="muted">' + date(f.uploaded) + (f.sizeKb ? ' · ' + size(f.sizeKb) : '') + '</span></label>').join('') + '</div>' +
+      '<div class="btns"><button id="pickDetail" class="ghost">看详情</button><span class="grow"></span><button id="pickCancel">取消</button><button class="primary" id="pickOk" disabled>下载所选</button></div></div>';
+    document.body.appendChild(bg);
+    const ok = bg.querySelector('#pickOk');
+    const boxes = Array.from(bg.querySelectorAll('input[type=checkbox]'));
+    boxes.forEach(b => b.addEventListener('change', () => { ok.disabled = !boxes.some(c => c.checked); }));
+    const close = () => { bg.remove(); resolve(); };
+    bg.querySelector('#pickCancel').onclick = close;
+    bg.querySelector('#pickDetail').onclick = () => { close(); S.dtab = 'files'; openDetail(x.key); };
+    bg.addEventListener('mousedown', e => { if (e.target === bg) close(); });
+    ok.onclick = async () => {
+      const ids = boxes.filter(b => b.checked).map(b => +b.value);
+      close();
+      for (const id of ids) {
+        try {
+          const r = await call('download', { domain: x.domain, modId: x.modId, fileId: id });
+          if (!r.ok) toast(r.message, 'error');
+        } catch (e) { toast(e.message, 'error'); }
+      }
+      toast('已加入下载：' + ids.length + ' 个文件', 'ok');
+    };
+  });
 }
 
 function toast(text, kind) {
@@ -950,6 +1001,9 @@ document.addEventListener('click', e => {
       return;
     }
     if (t.closest('.act-update')) { doUpdate([key]); return; }
+    if (t.closest('.act-mark')) { call('markUpToDate', { keys: [key] }); return; }
+    if (t.closest('.act-perm')) { setIgnore([key], 'perm'); return; }
+    if (t.closest('.act-unignore')) { setIgnore([key], 'none'); return; }
     if (t.closest('.act-menu')) { const r = t.getBoundingClientRect(); modMenu(m, r.left - 160, r.bottom + 4); return; }
     openDetail(key);
   }
@@ -967,6 +1021,30 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { if ($('.menu')) closeMenu(); else if (S.detailKey) closeDetail(); }
   if (e.key === 'F5') { e.preventDefault(); syncGame(); }
 });
+// 详情面板的宽度：拖分隔条调整，记住
+(function () {
+  const body = $('#body'), split = $('#split');
+  const set = w => { w = Math.max(320, Math.min(w, body.clientWidth - 360)); body.style.setProperty('--dw', w + 'px'); return w; };
+  try { const w = +localStorage.getItem('nmu.dw'); if (w) body.style.setProperty('--dw', w + 'px'); } catch (e) {}
+  split.addEventListener('mousedown', e => {
+    e.preventDefault();
+    split.classList.add('drag');
+    document.body.classList.add('resizing');
+    const right = body.getBoundingClientRect().right;
+    let w = 0;
+    const move = ev => { w = set(right - ev.clientX - 12); };
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      split.classList.remove('drag');
+      document.body.classList.remove('resizing');
+      if (w) try { localStorage.setItem('nmu.dw', String(w)); } catch (e) {}
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+  split.addEventListener('dblclick', () => { body.style.removeProperty('--dw'); try { localStorage.removeItem('nmu.dw'); } catch (e) {} });
+})();
 $('#gsort').addEventListener('change', e => { S.gsort = e.target.value; saveView(); renderList(); });
 $('#gsort').value = S.gsort;
 let gqTimer = 0;

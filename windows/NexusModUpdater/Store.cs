@@ -33,6 +33,9 @@ public sealed class ModEntry
 
 	public bool Local;
 
+	/// <summary>「标记为已是最新」时最新文件的上传时间：这之前的新文件都不算更新。</summary>
+	public long MarkedLatest;
+
 	public string Key => Store.Key(Domain, ModId);
 }
 
@@ -95,6 +98,9 @@ public sealed class NexusFile
 
 	public bool Primary;
 
+	/// <summary>N 网的压缩包内容清单地址（里面有每个文件的路径、大小、哈希）。</summary>
+	public string Manifest = "";
+
 	public bool Current => CategoryId == 1 || CategoryId == 2 || CategoryId == 3 || CategoryId == 5;
 }
 
@@ -118,6 +124,45 @@ public sealed class ModFiles
 	public List<FileUpdateLink> Updates = new List<FileUpdateLink>();
 
 	public long FetchedAt;
+
+	/// <summary>1.0.8 起记了内容清单地址；以前缓存的要重新取。</summary>
+	public bool HasManifests;
+}
+
+/// <summary>压缩包内容清单（只留核对本地文件要用的）。</summary>
+public sealed class Manifest
+{
+	public long ArchiveSize;
+
+	public string ArchiveMd5 = "";
+
+	/// <summary>压缩包里的文件：路径（/ 分隔）、大小、MD5。</summary>
+	public List<ManifestEntry> Files = new List<ManifestEntry>();
+}
+
+public sealed class ManifestEntry
+{
+	public string P = "";
+
+	public long S;
+
+	public string H = "";
+}
+
+/// <summary>在 mod 文件夹里找到的、认出来的 mod。</summary>
+public sealed class LocalFound
+{
+	public string Path = "";
+
+	/// <summary>认出来是哪个文件（版本）；0 = 只认出了 mod，不知道版本。</summary>
+	public int FileId;
+
+	public string FileName = "";
+
+	public long Uploaded;
+
+	/// <summary>filename = N 网文件名；hash = 文件内容对上了；size = 文件大小对上了；name = 只有文件夹名对上了。</summary>
+	public string How = "";
 }
 
 /// <summary>本程序装好的一个文件。</summary>
@@ -175,10 +220,16 @@ public sealed class State
 
 	public Dictionary<string, InstallRecord> Installs = new Dictionary<string, InstallRecord>();
 
+	/// <summary>本程序装的每一个文件：「mod key#文件 ID」→ 记录（同一个 mod 可能装了主文件和附加文件）。</summary>
+	public Dictionary<string, InstallRecord> InstallsByFile = new Dictionary<string, InstallRecord>();
+
 	/// <summary>文件夹里扫描到的 N 网压缩包：key → 时间戳（文件上传时间）。</summary>
 	public Dictionary<string, long> LocalFiles = new Dictionary<string, long>();
 
 	public Dictionary<string, string> LocalFileNames = new Dictionary<string, string>();
+
+	/// <summary>mod 文件夹里认出来的 mod：key → 位置和版本。</summary>
+	public Dictionary<string, LocalFound> Found = new Dictionary<string, LocalFound>();
 
 	public long LastSync;
 
@@ -210,6 +261,9 @@ public sealed class Cache
 
 	/// <summary>每个游戏上次取 updated.json 的时间。</summary>
 	public Dictionary<string, long> UpdatedFetched = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+
+	/// <summary>压缩包内容清单：清单地址 → 内容（不会变，存下来就不用再取）。</summary>
+	public Dictionary<string, Manifest> Manifests = new Dictionary<string, Manifest>();
 
 	/// <summary>游戏的中文名（从 Steam 查到的）。</summary>
 	public Dictionary<string, GameMeta> GameMeta = new Dictionary<string, GameMeta>(StringComparer.OrdinalIgnoreCase);

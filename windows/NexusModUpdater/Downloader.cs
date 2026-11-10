@@ -320,12 +320,8 @@ public static class Downloader
 			job.Message = "正在安装…";
 			Raise(job);
 			string name = string.IsNullOrEmpty(job.FileName) ? System.IO.Path.GetFileName(tmp) : job.FileName;
-			InstallRecord old;
-			lock (Store.Lock)
-			{
-				Store.St.Installs.TryGetValue(job.Key, out old);
-			}
-			string modName = string.IsNullOrEmpty(job.ModName) ? job.FileTitle : job.ModName;
+			InstallRecord old = Engine.OldFor(job.Domain, job.ModId, job.FileId);
+			string modName = string.IsNullOrEmpty(job.FileTitle) ? job.ModName : job.FileTitle;
 			InstallRecord rec = Installer.Install(tmp, name, game, modName, old, s =>
 			{
 				job.Message = s;
@@ -338,7 +334,7 @@ public static class Downloader
 			rec.FileTitle = job.FileTitle;
 			rec.Version = job.Version;
 			rec.Uploaded = job.Uploaded;
-			Engine.OnInstalled(rec);
+			Engine.OnInstalled(rec, old);
 			job.Path = rec.Path;
 			job.Status = "done";
 			job.Message = "已安装到 " + rec.Path;
@@ -585,11 +581,9 @@ public static class Downloader
 		try
 		{
 			GameSetting game;
-			InstallRecord old;
 			lock (Store.Lock)
 			{
 				game = Store.Cfg.Game(job.Domain);
-				Store.St.Installs.TryGetValue(job.Key, out old);
 			}
 			if (job.ModId > 0)
 			{
@@ -604,7 +598,8 @@ public static class Downloader
 			}
 			job.Status = "installing";
 			Raise(job);
-			InstallRecord rec = Installer.Install(job.BrowserFile, job.FileName, game, string.IsNullOrEmpty(job.ModName) ? job.FileTitle : job.ModName, old, null);
+			InstallRecord old = job.ModId > 0 ? Engine.OldFor(job.Domain, job.ModId, job.FileId) : null;
+			InstallRecord rec = Installer.Install(job.BrowserFile, job.FileName, game, string.IsNullOrEmpty(job.FileTitle) ? job.ModName : job.FileTitle, old, null);
 			rec.Domain = job.Domain;
 			rec.ModId = job.ModId;
 			rec.FileId = job.FileId;
@@ -613,7 +608,7 @@ public static class Downloader
 			rec.Uploaded = job.Uploaded;
 			if (job.ModId > 0)
 			{
-				Engine.OnInstalled(rec);
+				Engine.OnInstalled(rec, old);
 			}
 			job.Path = rec.Path;
 			job.Status = "done";

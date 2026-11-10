@@ -161,7 +161,7 @@
     else if (d.nmu === 'tr' && S.pending[d.id]) {
       var batch = S.pending[d.id];
       delete S.pending[d.id];
-      if (d.error) { if (batch[0]) show(batch[0], '翻译失败：' + d.error, true); return; }
+      if (d.error) { if (batch[0]) show(batch[0], /^翻译失败/.test(d.error) ? d.error : '翻译失败：' + d.error, true); return; }
       batch.forEach(function (b, i) { show(b, d.result && d.result[i]); });
     }
   });
