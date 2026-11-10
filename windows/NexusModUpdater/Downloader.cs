@@ -490,8 +490,8 @@ public static class Downloader
 			domain = pm.Groups[1].Value.ToLowerInvariant();
 			modId = int.Parse(pm.Groups[2].Value);
 		}
-		Match fm = Installer.NexusFileName.Match(suggested ?? "");
-		if (job != null && !(job.Domain == domain && job.ModId == modId) && !(fm.Success && int.Parse(fm.Groups["id"].Value) == job.ModId))
+		bool named = Installer.ParseName(suggested, out int fileModId, out _);
+		if (job != null && !(job.Domain == domain && job.ModId == modId) && !(named && fileModId == job.ModId))
 		{
 			job = null;
 		}
@@ -502,9 +502,9 @@ public static class Downloader
 				// 不是 mod 页面上的下载：交给浏览器默认处理
 				return;
 			}
-			if (fm.Success)
+			if (named)
 			{
-				modId = int.Parse(fm.Groups["id"].Value);
+				modId = fileModId;
 			}
 			bool hasFolder;
 			lock (Store.Lock)

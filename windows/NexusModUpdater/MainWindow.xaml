@@ -146,8 +146,8 @@
                             <ui:CardControl Icon="{ui:SymbolIcon FolderSearch24}">
                                 <ui:CardControl.Header>
                                     <StackPanel>
-                                        <TextBlock Text="扫描 mod 文件夹里的 N 网压缩包"/>
-                                        <TextBlock Text="文件名形如「名字-12345-1-0-1700000000.zip」的会被认出来" Style="{StaticResource Muted}"/>
+                                        <TextBlock Text="扫描 mod 文件夹里从 N 网下载的压缩包和解压出来的文件夹"/>
+                                        <TextBlock Text="没改过名的都能认出来（如「名字 625 1.0 2026-11-08T14-07Z xxx.zip」或同名文件夹，旧格式「名字-12345-1-0-1700000000.zip」也行）；只扫当前游戏的文件夹和一层子文件夹" Style="{StaticResource Muted}"/>
                                     </StackPanel>
                                 </ui:CardControl.Header>
                                 <ui:ToggleSwitch x:Name="ScanFolders" Click="Option_Changed"/>

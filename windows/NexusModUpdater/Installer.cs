@@ -15,7 +15,46 @@ public static class Installer
 	private static readonly string[] ArchiveExt = { ".zip", ".7z", ".rar", ".tar", ".gz", ".tgz", ".bz2", ".xz" };
 
 	/// <summary>N 网压缩包的命名：名字-modID-版本-上传时间戳.扩展名</summary>
+	/// <summary>N 网以前的文件名：名字-modID-版本-Unix时间.zip</summary>
 	public static readonly Regex NexusFileName = new Regex(@"^(?<name>.+?)-(?<id>\d+)-(?<ver>[\w\-\.]*?)-?(?<ts>\d{10})\.(?<ext>zip|7z|rar)$", RegexOptions.IgnoreCase);
+
+	/// <summary>
+	/// N 网现在的文件名：名字 modID 版本 2026-11-07T13-16Z 随机串.zip（空格分隔；解压出来的文件夹也是这个名字，没有扩展名）。
+	/// 靠后面的日期定位，日期前面两段就是 modID 和版本，所以名字里带数字、版本号也能认对。
+	/// </summary>
+	private static readonly Regex NexusFileNameV2 = new Regex(@"^(?<name>.+?)[ _](?<id>\d+)[ _](?<ver>\S+?)[ _](?<date>\d{4}-\d{2}-\d{2}T\d{2}-\d{2}(?:-\d{2})?Z)(?:[ _]\S*)?$", RegexOptions.IgnoreCase);
+
+	private static readonly Regex ArchiveSuffix = new Regex(@"\.(zip|7z|rar)$", RegexOptions.IgnoreCase);
+
+	/// <summary>
+	/// 从 N 网下载的文件名（或解压出来的同名文件夹名）里认出 modID 和文件上传时间。新旧两种格式都认。
+	/// </summary>
+	public static bool ParseName(string name, out int modId, out long ts)
+	{
+		modId = 0;
+		ts = 0;
+		name = (name ?? "").Trim();
+		Match m = NexusFileName.Match(name);
+		if (m.Success)
+		{
+			modId = int.Parse(m.Groups["id"].Value);
+			ts = long.Parse(m.Groups["ts"].Value);
+			return true;
+		}
+		m = NexusFileNameV2.Match(ArchiveSuffix.Replace(name, ""));
+		if (!m.Success || !int.TryParse(m.Groups["id"].Value, out modId) || modId <= 0)
+		{
+			modId = 0;
+			return false;
+		}
+		string date = m.Groups["date"].Value;
+		string[] formats = { "yyyy-MM-dd'T'HH-mm'Z'", "yyyy-MM-dd'T'HH-mm-ss'Z'" };
+		if (DateTime.TryParseExact(date, formats, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out DateTime dt))
+		{
+			ts = new DateTimeOffset(DateTime.SpecifyKind(dt, DateTimeKind.Utc)).ToUnixTimeSeconds();
+		}
+		return ts > 0;
+	}
 
 	public static bool IsArchive(string path) => ArchiveExt.Contains(Path.GetExtension(path).ToLowerInvariant());
 
@@ -218,7 +257,10 @@ public static class Installer
 		}
 	}
 
-	/// <summary>扫描 mod 文件夹（含一层子文件夹）里 N 网命名的压缩包：modID → (上传时间, 文件名)。</summary>
+	/// <summary>
+	/// 扫描 mod 文件夹（含一层子文件夹）里 N 网命名的压缩包和解压出来的同名文件夹：modID → (上传时间, 文件名)。
+	/// 自己改过名的文件夹认不出来（这些 mod 靠下载记录也能查到）。
+	/// </summary>
 	public static Dictionary<int, (long Ts, string Name)> Scan(string folder)
 	{
 		var map = new Dictionary<int, (long, string)>();
@@ -229,26 +271,25 @@ public static class Installer
 		IEnumerable<string> files;
 		try
 		{
-			files = Directory.EnumerateFiles(folder).Concat(Directory.EnumerateDirectories(folder).SelectMany(d =>
+			// 第一层的文件和文件夹，再加每个子文件夹里的文件和文件夹（比如「已停用mod备份」里的）
+			IEnumerable<string> Entries(string dir)
 			{
 				try
 				{
-					return Directory.EnumerateFiles(d);
+					return Directory.EnumerateFiles(dir).Concat(Directory.EnumerateDirectories(dir)).ToList();
 				}
 				catch
 				{
 					return Enumerable.Empty<string>();
 				}
-			}));
+			}
+			files = Entries(folder).Concat(Directory.EnumerateDirectories(folder).SelectMany(Entries));
 			foreach (string f in files)
 			{
-				Match m = NexusFileName.Match(Path.GetFileName(f));
-				if (!m.Success)
+				if (!ParseName(Path.GetFileName(f), out int id, out long ts))
 				{
 					continue;
 				}
-				int id = int.Parse(m.Groups["id"].Value);
-				long ts = long.Parse(m.Groups["ts"].Value);
 				if (!map.TryGetValue(id, out var cur) || cur.Item1 < ts)
 				{
 					map[id] = (ts, Path.GetFileName(f));
