@@ -81,17 +81,22 @@ public sealed class SiteView : Grid
 		_translate = new ToggleSwitch { Content = "翻译", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 12, 0), ToolTip = "把网页上的英文（评论、简介…）翻译后显示在原文下面" };
 		lock (Store.Lock)
 		{
-			_translate.IsChecked = Store.Cfg.TranslateSite && Store.Cfg.TranslateEngine != "off";
+			_translate.IsChecked = Store.Cfg.TranslateSite && Translator.Ready;
 		}
 		_translate.Click += delegate
 		{
+			if (_translate.IsChecked == true && !Translator.Ready)
+			{
+				_translate.IsChecked = false;
+				if (System.Windows.MessageBox.Show("还没有设置翻译服务（需要填一个翻译接口的 Key）。现在去设置吗？", "N网 Mod 更新", System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Question) == System.Windows.MessageBoxResult.Yes)
+				{
+					_main.SelectPage(2);
+				}
+				return;
+			}
 			lock (Store.Lock)
 			{
 				Store.Cfg.TranslateSite = _translate.IsChecked == true;
-				if (Store.Cfg.TranslateSite && Store.Cfg.TranslateEngine == "off")
-				{
-					Store.Cfg.TranslateEngine = "bing";
-				}
 			}
 			Store.SaveConfig();
 			PostTranslateState();
@@ -276,7 +281,7 @@ public sealed class SiteView : Grid
 		// 指定了就只在这次改开关（不写设置）；没指定按设置
 		lock (Store.Lock)
 		{
-			_translate.IsChecked = (translate ?? Store.Cfg.TranslateSite) && Store.Cfg.TranslateEngine != "off";
+			_translate.IsChecked = (translate ?? Store.Cfg.TranslateSite) && Translator.Ready;
 		}
 		if (_web.CoreWebView2 == null)
 		{
@@ -401,6 +406,11 @@ public sealed class SiteView : Grid
 		string text = _compose.Text?.Trim() ?? "";
 		if (text == "")
 		{
+			return;
+		}
+		if (!Translator.Ready)
+		{
+			_composeState.Text = "还没有设置翻译服务（设置 → 翻译）";
 			return;
 		}
 		_composeState.Text = "翻译中…";

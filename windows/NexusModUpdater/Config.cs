@@ -34,8 +34,17 @@ public sealed class Config
 
 	public int TintPercent = 30;
 
-	/// <summary>bing / google / openai / off</summary>
-	public string TranslateEngine = "bing";
+	/// <summary>azure / deepl / google / openai；空 = 还没设置</summary>
+	public string TranslateEngine = "";
+
+	public string AzureKey = "";
+
+	/// <summary>Azure 翻译资源的区域（如 eastasia）；全局资源留空。</summary>
+	public string AzureRegion = "";
+
+	public string DeepLKey = "";
+
+	public string GoogleKey = "";
 
 	/// <summary>zh-Hans / zh-Hant / en / ja / ko</summary>
 	public string TargetLang = "zh-Hans";
@@ -85,6 +94,11 @@ public sealed class Config
 				Config c = JsonConvert.DeserializeObject<Config>(File.ReadAllText(path, Encoding.UTF8)) ?? new Config();
 				c.Games = new Dictionary<string, GameSetting>(c.Games ?? new Dictionary<string, GameSetting>(), StringComparer.OrdinalIgnoreCase);
 				c.TintPercent = Math.Max(0, Math.Min(100, c.TintPercent));
+				// 1.0.0 的 bing（非官方接口）已去掉
+				if (c.TranslateEngine == "bing" || c.TranslateEngine == "off")
+				{
+					c.TranslateEngine = "";
+				}
 				return c;
 			}
 		}

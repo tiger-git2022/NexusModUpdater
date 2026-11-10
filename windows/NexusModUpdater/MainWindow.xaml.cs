@@ -247,7 +247,8 @@ public partial class MainWindow : FluentWindow
 		OpenAiBase.Text = c.OpenAiBase;
 		OpenAiKey.Password = c.OpenAiKey;
 		OpenAiModel.Text = c.OpenAiModel;
-		OpenAiPanel.Visibility = c.TranslateEngine == "openai" ? Visibility.Visible : Visibility.Collapsed;
+		AzureRegion.Text = c.AzureRegion;
+		UpdateTranslatePanels();
 		ThemeBox.SelectedIndex = c.Theme == "light" ? 1 : (c.Theme == "dark" ? 2 : 0);
 		BackdropBox.SelectedIndex = c.Backdrop == "mica" ? 1 : (c.Backdrop == "none" ? 2 : 0);
 		TintSlider.Value = c.TintPercent;
@@ -279,6 +280,7 @@ public partial class MainWindow : FluentWindow
 		{
 			return;
 		}
+		SaveTranslateKeys();
 		lock (Store.Lock)
 		{
 			Config c = Store.Cfg;
@@ -287,25 +289,101 @@ public partial class MainWindow : FluentWindow
 			c.AutoTranslate = AutoTranslate.IsChecked == true;
 			c.TranslateSite = TranslateSite.IsChecked == true;
 		}
-		OpenAiPanel.Visibility = Store.Cfg.TranslateEngine == "openai" ? Visibility.Visible : Visibility.Collapsed;
+		UpdateTranslatePanels();
 		Store.SaveConfig();
 		_app.PostSettings();
 	}
 
-	private void OpenAi_LostFocus(object sender, RoutedEventArgs e)
+	/// <summary>按选的翻译服务显示要填的 Key / 区域 / 接口地址。</summary>
+	private void UpdateTranslatePanels()
+	{
+		Config c = Store.Cfg;
+		string engine = c.TranslateEngine;
+		OpenAiPanel.Visibility = engine == "openai" ? Visibility.Visible : Visibility.Collapsed;
+		KeyCard.Visibility = engine == "azure" || engine == "deepl" || engine == "google" ? Visibility.Visible : Visibility.Collapsed;
+		RegionCard.Visibility = engine == "azure" ? Visibility.Visible : Visibility.Collapsed;
+		_keyEngine = engine;
+		switch (engine)
+		{
+		case "azure":
+			KeyTitle.Text = "微软 Azure 翻译 Key";
+			KeyHelp.Text = "在 Azure 门户创建「翻译器」资源（定价层选 F0 免费），在「密钥和终结点」里复制密钥 1";
+			TranslateKey.Password = c.AzureKey;
+			break;
+		case "deepl":
+			KeyTitle.Text = "DeepL API Key";
+			KeyHelp.Text = "注册 DeepL API Free（免费），在账户的 API Keys 里复制（以 :fx 结尾）";
+			TranslateKey.Password = c.DeepLKey;
+			break;
+		case "google":
+			KeyTitle.Text = "谷歌云 API Key";
+			KeyHelp.Text = "在 Google Cloud 控制台启用 Cloud Translation API，创建 API 密钥";
+			TranslateKey.Password = c.GoogleKey;
+			break;
+		}
+	}
+
+	private string _keyEngine = "";
+
+	private void SaveTranslateKeys()
 	{
 		lock (Store.Lock)
 		{
-			Store.Cfg.OpenAiBase = OpenAiBase.Text.Trim();
-			Store.Cfg.OpenAiKey = OpenAiKey.Password.Trim();
-			Store.Cfg.OpenAiModel = OpenAiModel.Text.Trim();
+			Config c = Store.Cfg;
+			c.OpenAiBase = OpenAiBase.Text.Trim();
+			c.OpenAiKey = OpenAiKey.Password.Trim();
+			c.OpenAiModel = OpenAiModel.Text.Trim();
+			c.AzureRegion = AzureRegion.Text.Trim();
+			string key = TranslateKey.Password.Trim();
+			switch (_keyEngine)
+			{
+			case "azure":
+				c.AzureKey = key;
+				break;
+			case "deepl":
+				c.DeepLKey = key;
+				break;
+			case "google":
+				c.GoogleKey = key;
+				break;
+			}
 		}
+	}
+
+	private void OpenAi_LostFocus(object sender, RoutedEventArgs e)
+	{
+		if (_loading)
+		{
+			return;
+		}
+		SaveTranslateKeys();
 		Store.SaveConfig();
+		_app.PostSettings();
+	}
+
+	private void KeyHelp_Click(object sender, RoutedEventArgs e)
+	{
+		string url = Store.Cfg.TranslateEngine switch
+		{
+			"azure" => "https://learn.microsoft.com/zh-cn/azure/ai-services/translator/create-translator-resource",
+			"deepl" => "https://www.deepl.com/pro-api",
+			"google" => "https://console.cloud.google.com/apis/library/translate.googleapis.com",
+			_ => null
+		};
+		if (url != null)
+		{
+			AppView.OpenExternal(url);
+		}
 	}
 
 	private async void TestTranslate_Click(object sender, RoutedEventArgs e)
 	{
 		OpenAi_LostFocus(null, null);
+		if (!Translator.Ready)
+		{
+			TestResult.Text = "还没有设置好：先选翻译服务并填写 Key";
+			return;
+		}
 		TestResult.Text = "翻译中…";
 		try
 		{

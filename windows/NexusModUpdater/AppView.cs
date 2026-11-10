@@ -391,10 +391,6 @@ public sealed class AppView : Grid
 			lock (Store.Lock)
 			{
 				Store.Cfg.AutoTranslate = a.Value<bool>("on");
-				if (Store.Cfg.AutoTranslate && Store.Cfg.TranslateEngine == "off")
-				{
-					Store.Cfg.TranslateEngine = "bing";
-				}
 			}
 			Store.SaveConfig();
 			return Engine.StatusJson();

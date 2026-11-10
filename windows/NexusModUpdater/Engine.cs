@@ -238,7 +238,9 @@ public static class Engine
 				["syncing"] = Syncing,
 				["daily"] = NexusApi.DailyRemaining,
 				["hourly"] = NexusApi.HourlyRemaining,
-				["autoTranslate"] = Store.Cfg.AutoTranslate && Store.Cfg.TranslateEngine != "off",
+				["autoTranslate"] = Store.Cfg.AutoTranslate && Translator.Ready,
+				["wantTranslate"] = Store.Cfg.AutoTranslate,
+				["translateReady"] = Translator.Ready,
 				["lang"] = Store.Cfg.TargetLang,
 				["games"] = new JArray(Store.Cfg.Games.Values.Where(g => !string.IsNullOrEmpty(g.Folder)).Select(g => g.Domain))
 			};

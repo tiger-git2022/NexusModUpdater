@@ -169,15 +169,37 @@
                                 <ui:CardControl.Header>
                                     <StackPanel>
                                         <TextBlock Text="翻译服务"/>
-                                        <TextBlock Text="微软：国内可直连，免费；谷歌：需要能访问谷歌；OpenAI 兼容：DeepSeek、本地模型等" Style="{StaticResource Muted}"/>
+                                        <TextBlock Text="都是官方接口，需要自己的 Key：微软和 DeepL 有免费额度、国内可直连；OpenAI 兼容可以用 DeepSeek 或本地模型" Style="{StaticResource Muted}"/>
                                     </StackPanel>
                                 </ui:CardControl.Header>
-                                <ComboBox x:Name="EngineBox" MinWidth="200" SelectionChanged="Translate_Changed">
-                                    <ComboBoxItem Content="微软翻译（推荐）" Tag="bing"/>
-                                    <ComboBoxItem Content="谷歌翻译" Tag="google"/>
-                                    <ComboBoxItem Content="OpenAI 兼容接口" Tag="openai"/>
-                                    <ComboBoxItem Content="关闭翻译" Tag="off"/>
+                                <ComboBox x:Name="EngineBox" MinWidth="220" SelectionChanged="Translate_Changed">
+                                    <ComboBoxItem Content="不翻译 / 还没设置" Tag=""/>
+                                    <ComboBoxItem Content="微软 Azure 翻译（每月 200 万字免费）" Tag="azure"/>
+                                    <ComboBoxItem Content="DeepL（每月 50 万字免费）" Tag="deepl"/>
+                                    <ComboBoxItem Content="谷歌云翻译" Tag="google"/>
+                                    <ComboBoxItem Content="OpenAI 兼容接口（DeepSeek、本地模型）" Tag="openai"/>
                                 </ComboBox>
+                            </ui:CardControl>
+                            <ui:CardControl x:Name="KeyCard" Icon="{ui:SymbolIcon Key24}" Visibility="Collapsed">
+                                <ui:CardControl.Header>
+                                    <StackPanel>
+                                        <TextBlock x:Name="KeyTitle" Text="Key"/>
+                                        <TextBlock x:Name="KeyHelp" Style="{StaticResource Muted}"/>
+                                    </StackPanel>
+                                </ui:CardControl.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:PasswordBox x:Name="TranslateKey" Width="300" Margin="0,0,8,0" LostFocus="OpenAi_LostFocus"/>
+                                    <ui:Button Content="申请…" Click="KeyHelp_Click"/>
+                                </StackPanel>
+                            </ui:CardControl>
+                            <ui:CardControl x:Name="RegionCard" Icon="{ui:SymbolIcon Globe24}" Visibility="Collapsed">
+                                <ui:CardControl.Header>
+                                    <StackPanel>
+                                        <TextBlock Text="区域"/>
+                                        <TextBlock Text="Azure 里翻译资源的「位置/区域」，如 eastasia；全局（global）资源留空" Style="{StaticResource Muted}"/>
+                                    </StackPanel>
+                                </ui:CardControl.Header>
+                                <ui:TextBox x:Name="AzureRegion" Width="200" PlaceholderText="eastasia" LostFocus="OpenAi_LostFocus"/>
                             </ui:CardControl>
                             <StackPanel x:Name="OpenAiPanel" Visibility="Collapsed">
                                 <ui:CardControl Icon="{ui:SymbolIcon Server24}" Header="接口地址">

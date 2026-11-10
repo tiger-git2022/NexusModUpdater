@@ -221,6 +221,7 @@ try {
   if (saved.sort) S.sort = saved.sort;
   if (saved.game != null) S.game = saved.game;
 } catch (e) {}
+try { S.trHint = localStorage.getItem('nmu.trHint') === '1'; } catch (e) {}
 function saveView() { try { localStorage.setItem('nmu.view', JSON.stringify({ sort: S.sort, game: S.game })); } catch (e) {} }
 
 const params = new URLSearchParams(location.search);
@@ -680,6 +681,7 @@ document.addEventListener('click', e => {
     if (g === 'settings') call('settings');
     else if (g === 'login') call('login');
     else if (g === 'sync') call('sync');
+    else if (g === 'hideTr') { S.trHint = true; try { localStorage.setItem('nmu.trHint', '1'); } catch (err) {} renderNotice(); }
     return;
   }
   const tab = t.closest('.tab[data-tab]');
@@ -774,6 +776,12 @@ let qTimer = 0;
 $('#search').addEventListener('input', e => { clearTimeout(qTimer); qTimer = setTimeout(() => { S.q = e.target.value; renderList(); }, 150); });
 $('#syncBtn').addEventListener('click', () => call('sync'));
 $('#trToggle').addEventListener('change', async e => {
+  if (e.target.checked && !S.status.translateReady) {
+    e.target.checked = false;
+    toast('还没有设置翻译服务：在设置 → 翻译里选一个服务并填写 Key', 'error');
+    call('settings');
+    return;
+  }
   S.trOn = e.target.checked;
   S.status = await call('setAutoTranslate', { on: S.trOn });
   setTranslateScript();
@@ -791,7 +799,11 @@ function renderNotice() {
   if (st.syncing || S.sync.text) {
     h += '<div class="banner"><span class="grow">' + esc(S.sync.text || '正在检查…') + '</span></div>' +
       '<div class="progress' + (S.sync.pct >= 0 && S.sync.pct < 100 ? '' : ' indet') + '" style="margin:-4px 0 8px"><i style="width:' + Math.max(0, S.sync.pct) + '%"></i></div>';
-  } else if (st.note) {
+  } else if (st.wantTranslate && !st.translateReady && !S.trHint) {
+    h += '<div class="banner"><span class="grow">要自动翻译 mod 简介和评论，请先在设置里选一个翻译服务并填写 Key（微软 Azure、DeepL 都有免费额度）。</span>' +
+      '<button class="small" data-go="settings">去设置</button><button class="small ghost" data-go="hideTr">不再提示</button></div>';
+  }
+  if (!st.syncing && !S.sync.text && st.note) {
     const login = /登录/.test(st.note), key = /API Key/.test(st.note);
     h += '<div class="banner warn"><span class="grow">' + esc(st.note) + '</span>' +
       (login ? '<button class="small" data-go="login">去登录</button>' : '') + (key ? '<button class="small" data-go="settings">去设置</button>' : '') + '</div>';
@@ -839,7 +851,8 @@ function onEvent(d) {
     case 'toast': toast(d.text, d.kind); break;
     case 'theme': applyTheme(d.theme, d.accent); break;
     case 'status':
-      S.status = d.status;
+      S.status = Object.assign(S.status, d.status);
+      renderNotice();
       S.trOn = !!d.status.autoTranslate;
       $('#trToggle').checked = S.trOn;
       S.tr.clear();

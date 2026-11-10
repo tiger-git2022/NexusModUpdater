@@ -14,7 +14,7 @@ using Newtonsoft.Json.Linq;
 namespace NexusModUpdater;
 
 /// <summary>
-/// 翻译：微软（Edge 浏览器内置翻译用的接口，国内可直连，免费）、谷歌（免费网页接口）、
+/// 翻译：各家官方接口：微软 Azure、DeepL、谷歌云（都有免费额度，需要自己的 Key），
 /// 或 OpenAI 兼容接口（DeepSeek、本地模型等）。结果缓存到 nmu.translate.json。
 /// </summary>
 public static class Translator
@@ -27,10 +27,6 @@ public static class Translator
 
 	private static Timer _saveTimer;
 
-	private static string _bingToken;
-
-	private static DateTime _bingTokenAt;
-
 	private static readonly SemaphoreSlim Gate = new SemaphoreSlim(3);
 
 	private static readonly Regex Cjk = new Regex("[぀-ヿ㐀-鿿가-힯]");
@@ -42,12 +38,32 @@ public static class Translator
 		("zh-Hans", "简体中文"), ("zh-Hant", "繁體中文"), ("en", "English"), ("ja", "日本語"), ("ko", "한국어")
 	};
 
+	/// <summary>翻译服务设置好了吗（选了服务、填了需要的 Key）。</summary>
+	public static bool Ready
+	{
+		get
+		{
+			lock (Store.Lock)
+			{
+				Config c = Store.Cfg;
+				return c.TranslateEngine switch
+				{
+					"azure" => !string.IsNullOrWhiteSpace(c.AzureKey),
+					"deepl" => !string.IsNullOrWhiteSpace(c.DeepLKey),
+					"google" => !string.IsNullOrWhiteSpace(c.GoogleKey),
+					"openai" => !string.IsNullOrWhiteSpace(c.OpenAiBase),
+					_ => false
+				};
+			}
+		}
+	}
+
 	private static HttpClient CreateClient()
 	{
 		ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
 		var handler = new HttpClientHandler { AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate };
 		var c = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
-		c.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 Edg/130.0");
+		c.DefaultRequestHeaders.UserAgent.ParseAdd("NexusModUpdater/" + Updater.CurrentVersion);
 		return c;
 	}
 
@@ -140,7 +156,7 @@ public static class Translator
 			for (int i = 0; i < texts.Count; i++)
 			{
 				string t = texts[i] ?? "";
-				if (engine == "off" || !Needs(t, target))
+				if (!Ready || !Needs(t, target))
 				{
 					result[i] = t;
 				}
@@ -165,9 +181,11 @@ public static class Translator
 		{
 			done = engine switch
 			{
+				"azure" => await AzureAsync(unique, target).ConfigureAwait(false),
+				"deepl" => await DeepLAsync(unique, target).ConfigureAwait(false),
 				"google" => await GoogleAsync(unique, target).ConfigureAwait(false),
 				"openai" => await OpenAiAsync(unique, target).ConfigureAwait(false),
-				_ => await BingAsync(unique, target).ConfigureAwait(false)
+				_ => throw new InvalidOperationException("还没有设置翻译服务（设置 → 翻译）")
 			};
 		}
 		catch (Exception ex)
@@ -198,79 +216,122 @@ public static class Translator
 		return (await TranslateAsync(new[] { text }, target).ConfigureAwait(false))[0];
 	}
 
-	// ---- 微软 ----
+	// ---- 分批 ----
 
-	private static async Task<string> BingTokenAsync(bool force = false)
+	private static List<List<string>> Batches(List<string> texts, int maxItems, int maxChars)
 	{
-		if (!force && _bingToken != null && DateTime.UtcNow - _bingTokenAt < TimeSpan.FromMinutes(8))
-		{
-			return _bingToken;
-		}
-		_bingToken = (await Http.GetStringAsync("https://edge.microsoft.com/translate/auth").ConfigureAwait(false)).Trim();
-		_bingTokenAt = DateTime.UtcNow;
-		return _bingToken;
-	}
-
-	private static async Task<Dictionary<string, string>> BingAsync(List<string> texts, string target)
-	{
-		var map = new Dictionary<string, string>();
-		// 每次最多 100 段、约 40000 字
+		var batches = new List<List<string>>();
 		var batch = new List<string>();
 		int chars = 0;
-		var batches = new List<List<string>>();
 		foreach (string t in texts)
 		{
-			if (batch.Count >= 80 || chars + t.Length > 30000)
+			if (batch.Count > 0 && (batch.Count >= maxItems || chars + t.Length > maxChars))
 			{
 				batches.Add(batch);
 				batch = new List<string>();
 				chars = 0;
 			}
-			batch.Add(t.Length > 30000 ? t.Substring(0, 30000) : t);
+			batch.Add(t);
 			chars += t.Length;
 		}
 		if (batch.Count > 0)
 		{
 			batches.Add(batch);
 		}
-		foreach (List<string> b in batches)
+		return batches;
+	}
+
+	private static string Clip(string t, int max) => t.Length > max ? t.Substring(0, max) : t;
+
+	private static async Task<string> PostJsonAsync(string url, object payload, Action<HttpRequestMessage> auth, string name)
+	{
+		await Gate.WaitAsync().ConfigureAwait(false);
+		try
 		{
-			await Gate.WaitAsync().ConfigureAwait(false);
-			try
+			using var req = new HttpRequestMessage(HttpMethod.Post, url);
+			auth?.Invoke(req);
+			req.Content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
+			using HttpResponseMessage resp = await Http.SendAsync(req).ConfigureAwait(false);
+			string body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+			if ((int)resp.StatusCode == 401 || (int)resp.StatusCode == 403)
 			{
-				for (int attempt = 0; ; attempt++)
-				{
-					string token = await BingTokenAsync(attempt > 0).ConfigureAwait(false);
-					using var req = new HttpRequestMessage(HttpMethod.Post, "https://api-edge.cognitive.microsofttranslator.com/translate?api-version=3.0&to=" + target);
-					req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-					req.Content = new StringContent(JsonConvert.SerializeObject(b.Select(t => new { Text = t })), Encoding.UTF8, "application/json");
-					using HttpResponseMessage resp = await Http.SendAsync(req).ConfigureAwait(false);
-					string body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
-					if ((int)resp.StatusCode == 401 && attempt == 0)
-					{
-						continue;
-					}
-					if (!resp.IsSuccessStatusCode)
-					{
-						throw new HttpRequestException("微软翻译 HTTP " + (int)resp.StatusCode + " " + Short(body));
-					}
-					JArray arr = JArray.Parse(body);
-					for (int i = 0; i < b.Count && i < arr.Count; i++)
-					{
-						map[b[i]] = arr[i]["translations"]?.First?.Value<string>("text");
-					}
-					break;
-				}
+				throw new HttpRequestException(name + "的 Key 无效或没有权限（HTTP " + (int)resp.StatusCode + "）");
 			}
-			finally
+			if (!resp.IsSuccessStatusCode)
 			{
-				Gate.Release();
+				throw new HttpRequestException(name + " HTTP " + (int)resp.StatusCode + " " + Short(body));
+			}
+			return body;
+		}
+		finally
+		{
+			Gate.Release();
+		}
+	}
+
+	// ---- 微软 Azure 翻译（官方接口，免费层每月 200 万字符）----
+
+	private static async Task<Dictionary<string, string>> AzureAsync(List<string> texts, string target)
+	{
+		string key, region;
+		lock (Store.Lock)
+		{
+			key = (Store.Cfg.AzureKey ?? "").Trim();
+			region = (Store.Cfg.AzureRegion ?? "").Trim();
+		}
+		var map = new Dictionary<string, string>();
+		foreach (List<string> b in Batches(texts, 100, 45000))
+		{
+			string body = await PostJsonAsync("https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=" + target, b.Select(t => new { Text = Clip(t, 45000) }), req =>
+			{
+				req.Headers.Add("Ocp-Apim-Subscription-Key", key);
+				if (region != "")
+				{
+					req.Headers.Add("Ocp-Apim-Subscription-Region", region);
+				}
+			}, "微软翻译").ConfigureAwait(false);
+			JArray arr = JArray.Parse(body);
+			for (int i = 0; i < b.Count && i < arr.Count; i++)
+			{
+				map[b[i]] = arr[i]["translations"]?.First?.Value<string>("text");
 			}
 		}
 		return map;
 	}
 
-	// ---- 谷歌 ----
+	// ---- DeepL（官方接口，免费版每月 50 万字符）----
+
+	private static string DeepLLang(string target) => target switch
+	{
+		"zh-Hans" => "ZH-HANS",
+		"zh-Hant" => "ZH-HANT",
+		"en" => "EN-US",
+		_ => target.ToUpperInvariant()
+	};
+
+	private static async Task<Dictionary<string, string>> DeepLAsync(List<string> texts, string target)
+	{
+		string key;
+		lock (Store.Lock)
+		{
+			key = (Store.Cfg.DeepLKey ?? "").Trim();
+		}
+		// 免费版的 Key 以 :fx 结尾，用 api-free 地址
+		string url = key.EndsWith(":fx", StringComparison.OrdinalIgnoreCase) ? "https://api-free.deepl.com/v2/translate" : "https://api.deepl.com/v2/translate";
+		var map = new Dictionary<string, string>();
+		foreach (List<string> b in Batches(texts, 50, 100000))
+		{
+			string body = await PostJsonAsync(url, new { text = b, target_lang = DeepLLang(target) }, req => req.Headers.TryAddWithoutValidation("Authorization", "DeepL-Auth-Key " + key), "DeepL").ConfigureAwait(false);
+			JArray arr = JObject.Parse(body)["translations"] as JArray ?? new JArray();
+			for (int i = 0; i < b.Count && i < arr.Count; i++)
+			{
+				map[b[i]] = arr[i].Value<string>("text");
+			}
+		}
+		return map;
+	}
+
+	// ---- 谷歌云翻译（官方接口 v2，需要 API Key）----
 
 	private static string GoogleLang(string target) => target switch
 	{
@@ -281,35 +342,21 @@ public static class Translator
 
 	private static async Task<Dictionary<string, string>> GoogleAsync(List<string> texts, string target)
 	{
-		var map = new Dictionary<string, string>();
-		await Task.WhenAll(texts.Select(async t =>
+		string key;
+		lock (Store.Lock)
 		{
-			await Gate.WaitAsync().ConfigureAwait(false);
-			try
+			key = (Store.Cfg.GoogleKey ?? "").Trim();
+		}
+		var map = new Dictionary<string, string>();
+		foreach (List<string> b in Batches(texts, 100, 25000))
+		{
+			string body = await PostJsonAsync("https://translation.googleapis.com/language/translate/v2?key=" + Uri.EscapeDataString(key), new { q = b, target = GoogleLang(target), format = "text" }, null, "谷歌云翻译").ConfigureAwait(false);
+			JArray arr = JObject.Parse(body)["data"]?["translations"] as JArray ?? new JArray();
+			for (int i = 0; i < b.Count && i < arr.Count; i++)
 			{
-				var content = new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("q", t.Length > 5000 ? t.Substring(0, 5000) : t) });
-				using HttpResponseMessage resp = await Http.PostAsync("https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&dt=t&tl=" + GoogleLang(target), content).ConfigureAwait(false);
-				string body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
-				if (!resp.IsSuccessStatusCode)
-				{
-					throw new HttpRequestException("谷歌翻译 HTTP " + (int)resp.StatusCode);
-				}
-				JArray arr = JArray.Parse(body);
-				var sb = new StringBuilder();
-				foreach (JToken seg in arr[0] as JArray ?? new JArray())
-				{
-					sb.Append(seg[0]?.Value<string>());
-				}
-				lock (map)
-				{
-					map[t] = sb.ToString();
-				}
+				map[b[i]] = WebUtility.HtmlDecode(arr[i].Value<string>("translatedText") ?? "");
 			}
-			finally
-			{
-				Gate.Release();
-			}
-		})).ConfigureAwait(false);
+		}
 		return map;
 	}
 
