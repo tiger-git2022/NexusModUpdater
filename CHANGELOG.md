@@ -2,6 +2,13 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.3] - 2026-11-10
+
+### 改动
+- DeepSeek 按现在的接口调用：模型默认 `deepseek-flash`，可选 `deepseek-v4-pro` 或直接输入新模型名；用 `thinking` 参数开关思考模式、`reasoning_effort` 设思考强度（low / high / max）。1.0.2 用的 `deepseek-chat` / `deepseek-reasoner` 已经停用，旧设置会自动迁移。
+- 思考模式三选一：关闭 / 长文才开 / 总是开。「长文才开」可以设字数门槛（默认 300 词，中日文按字数），每段单独判断：短评论照常不思考，长简介才开。
+- 翻译缓存不再按翻译服务区分：换了服务，已经翻过的文字也不会再翻一遍；原文没变就直接用缓存，原文改了才重新翻。退出程序时会立刻保存缓存。
+
 ## [1.0.2] - 2026-11-10
 
 ### 新增

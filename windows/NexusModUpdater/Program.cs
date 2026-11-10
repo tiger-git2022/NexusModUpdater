@@ -48,7 +48,7 @@ public static class Program
 			}
 		}) { IsBackground = true };
 		waiter.Start();
-		app.Exit += (s, e) => Store.SaveNow();
+		app.Exit += (s, e) => { Store.SaveNow(); Translator.SaveNow(); };
 		app.Run(window);
 		GC.KeepAlive(mutex);
 	}

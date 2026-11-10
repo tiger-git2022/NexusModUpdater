@@ -249,8 +249,12 @@ public partial class MainWindow : FluentWindow
 		OpenAiModel.Text = c.OpenAiModel;
 		AzureRegion.Text = c.AzureRegion;
 		MyMemoryEmail.Text = c.MyMemoryEmail;
-		DeepSeekThinking.IsChecked = c.DeepSeekThinking;
+		DeepSeekModel.Text = c.DeepSeekModel;
+		DeepSeekThink.SelectedItem = DeepSeekThink.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == c.DeepSeekThink) ?? DeepSeekThink.Items[1];
+		DeepSeekThinkWords.Text = c.DeepSeekThinkWords.ToString();
+		DeepSeekEffort.SelectedItem = DeepSeekEffort.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == c.DeepSeekEffort) ?? DeepSeekEffort.Items[1];
 		LlmStream.IsChecked = c.LlmStream;
+		UpdateThinkCards();
 		UpdateTranslatePanels();
 		ThemeBox.SelectedIndex = c.Theme == "light" ? 1 : (c.Theme == "dark" ? 2 : 0);
 		BackdropBox.SelectedIndex = c.Backdrop == "mica" ? 1 : (c.Backdrop == "none" ? 2 : 0);
@@ -378,12 +382,34 @@ public partial class MainWindow : FluentWindow
 
 	private void LlmOption_Click(object sender, RoutedEventArgs e)
 	{
+		if (_loading || !_ready)
+		{
+			return;
+		}
+		// 下拉框选中项变了时 Text 还没更新，直接取选中项
+		string model = sender == DeepSeekModel && e is SelectionChangedEventArgs && DeepSeekModel.SelectedItem is ComboBoxItem mi ? (string)mi.Content : DeepSeekModel.Text;
+		model = (model ?? "").Trim();
+		int words = int.TryParse(DeepSeekThinkWords.Text.Trim(), out int w) && w > 0 ? w : 300;
+		DeepSeekThinkWords.Text = words.ToString();
 		lock (Store.Lock)
 		{
-			Store.Cfg.DeepSeekThinking = DeepSeekThinking.IsChecked == true;
-			Store.Cfg.LlmStream = LlmStream.IsChecked == true;
+			Config c = Store.Cfg;
+			c.DeepSeekModel = model == "" ? "deepseek-flash" : model;
+			c.DeepSeekThink = (DeepSeekThink.SelectedItem as ComboBoxItem)?.Tag as string ?? "auto";
+			c.DeepSeekThinkWords = words;
+			c.DeepSeekEffort = (DeepSeekEffort.SelectedItem as ComboBoxItem)?.Tag as string ?? "high";
+			c.LlmStream = LlmStream.IsChecked == true;
 		}
+		UpdateThinkCards();
 		Store.SaveConfig();
+	}
+
+	/// <summary>思考关闭时不显示词数和强度；总是开时不显示词数。</summary>
+	private void UpdateThinkCards()
+	{
+		string mode = Store.Cfg.DeepSeekThink;
+		ThinkWordsCard.Visibility = mode == "auto" ? Visibility.Visible : Visibility.Collapsed;
+		EffortCard.Visibility = mode == "off" ? Visibility.Collapsed : Visibility.Visible;
 	}
 
 	private void KeyHelp_Click(object sender, RoutedEventArgs e)

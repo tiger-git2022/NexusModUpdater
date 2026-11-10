@@ -71,44 +71,71 @@ public static class Translator
 		{
 			if (_cache == null)
 			{
+				Dictionary<string, string> raw = null;
 				try
 				{
-					_cache = File.Exists(Paths.Translations) ? JsonConvert.DeserializeObject<Dictionary<string, string>>(File.ReadAllText(Paths.Translations, Encoding.UTF8)) : null;
+					raw = File.Exists(Paths.Translations) ? JsonConvert.DeserializeObject<Dictionary<string, string>>(File.ReadAllText(Paths.Translations, Encoding.UTF8)) : null;
 				}
 				catch
 				{
 				}
-				_cache ??= new Dictionary<string, string>();
+				// 键是「目标语言|原文」，换翻译服务也能用；1.0.2 及以前的键前面多一个服务名，去掉
+				_cache = new Dictionary<string, string>();
+				foreach (KeyValuePair<string, string> kv in raw ?? new Dictionary<string, string>())
+				{
+					string k = kv.Key;
+					int bar = k.IndexOf('|');
+					if (bar > 0 && OldEngines.Contains(k.Substring(0, bar)))
+					{
+						k = k.Substring(bar + 1);
+					}
+					_cache[k] = kv.Value;
+				}
 			}
 			return _cache;
 		}
 	}
 
+	private static readonly HashSet<string> OldEngines = new HashSet<string> { "mymemory", "deepseek", "azure", "deepl", "google", "openai", "bing" };
+
+	private static bool _dirty;
+
+	private static string CacheKey(string target, string text) => target + "|" + text;
+
 	private static void SaveSoon()
 	{
-		_saveTimer ??= new Timer(_ =>
-		{
-			lock (CacheLock)
-			{
-				try
-				{
-					// 缓存太大时丢掉一半
-					if (_cache.Count > 60000)
-					{
-						foreach (string k in _cache.Keys.Take(_cache.Count / 2).ToList())
-						{
-							_cache.Remove(k);
-						}
-					}
-					Store.WriteAtomic(Paths.Translations, JsonConvert.SerializeObject(_cache));
-				}
-				catch (Exception ex)
-				{
-					Logger.Log("保存翻译缓存失败：" + ex.Message);
-				}
-			}
-		}, null, Timeout.Infinite, Timeout.Infinite);
+		_dirty = true;
+		_saveTimer ??= new Timer(_ => SaveNow(), null, Timeout.Infinite, Timeout.Infinite);
 		_saveTimer.Change(3000, Timeout.Infinite);
+	}
+
+	/// <summary>把翻译缓存写到磁盘（退出时也调一次，免得最后几秒的译文丢了）。</summary>
+	public static void SaveNow()
+	{
+		lock (CacheLock)
+		{
+			if (!_dirty || _cache == null)
+			{
+				return;
+			}
+			try
+			{
+				// 缓存太大时丢掉最早的一半
+				if (_cache.Count > 60000)
+				{
+					foreach (string k in _cache.Keys.Take(_cache.Count / 2).ToList())
+					{
+						_cache.Remove(k);
+					}
+				}
+				Store.WriteAtomic(Paths.Translations, JsonConvert.SerializeObject(_cache));
+				_dirty = false;
+			}
+			catch (Exception ex)
+			{
+				Logger.Log("保存翻译缓存失败：" + ex.Message);
+			}
+		}
 	}
 
 	public static void ClearCache()
@@ -196,7 +223,7 @@ public static class Translator
 				{
 					result[i] = t;
 				}
-				else if (CacheMap.TryGetValue(engine + "|" + target + "|" + t, out string hit))
+				else if (CacheMap.TryGetValue(CacheKey(target, t), out string hit))
 				{
 					result[i] = hit;
 				}
@@ -236,7 +263,7 @@ public static class Translator
 			{
 				if (!string.IsNullOrEmpty(kv.Value))
 				{
-					CacheMap[engine + "|" + target + "|" + kv.Key] = kv.Value;
+					CacheMap[CacheKey(target, kv.Key)] = kv.Value;
 				}
 			}
 			SaveSoon();
@@ -506,7 +533,22 @@ public static class Translator
 		public string Model;
 
 		public bool Stream;
+
+		/// <summary>DeepSeek 的 thinking 开关；null 表示不发这个参数（其他 OpenAI 兼容接口）。</summary>
+		public bool? Think;
+
+		public string Effort;
+
+		/// <summary>DeepSeek：off / auto / on，和 auto 的词数门槛。</summary>
+		public string ThinkMode;
+
+		public int ThinkWords;
+
+		public LlmOptions With(bool think) => new LlmOptions { Name = Name, Base = Base, Key = Key, Model = Model, Stream = Stream, Think = think, Effort = Effort };
 	}
+
+	/// <summary>DeepSeek 接口地址（测试时可以换成本地模拟服务器）。</summary>
+	internal static string DeepSeekBase = "https://api.deepseek.com";
 
 	private static LlmOptions Llm(string engine)
 	{
@@ -515,10 +557,51 @@ public static class Translator
 			Config c = Store.Cfg;
 			if (engine == "deepseek")
 			{
-				return new LlmOptions { Name = "DeepSeek", Base = "https://api.deepseek.com", Key = (c.DeepSeekKey ?? "").Trim(), Model = c.DeepSeekThinking ? "deepseek-reasoner" : "deepseek-chat", Stream = c.LlmStream };
+				return new LlmOptions
+				{
+					Name = "DeepSeek",
+					Base = DeepSeekBase,
+					Key = (c.DeepSeekKey ?? "").Trim(),
+					Model = string.IsNullOrWhiteSpace(c.DeepSeekModel) ? "deepseek-flash" : c.DeepSeekModel.Trim(),
+					Stream = c.LlmStream,
+					Effort = c.DeepSeekEffort ?? "high",
+					ThinkMode = c.DeepSeekThink ?? "auto",
+					ThinkWords = c.DeepSeekThinkWords
+				};
 			}
 			return new LlmOptions { Name = "接口", Base = (c.OpenAiBase ?? "").Trim().TrimEnd('/'), Key = (c.OpenAiKey ?? "").Trim(), Model = (c.OpenAiModel ?? "").Trim(), Stream = c.LlmStream };
 		}
+	}
+
+	/// <summary>
+	/// 粗略的词数：英文、俄文、韩文等按空格分开的词算一个；汉字和假名一个字算一个。
+	/// </summary>
+	public static int Words(string text)
+	{
+		int n = 0;
+		bool inWord = false;
+		foreach (char ch in text ?? "")
+		{
+			bool cjk = (ch >= 0x3040 && ch <= 0x30ff) || (ch >= 0x3400 && ch <= 0x4dbf) || (ch >= 0x4e00 && ch <= 0x9fff) || (ch >= 0xf900 && ch <= 0xfaff);
+			if (cjk)
+			{
+				n++;
+				inWord = false;
+			}
+			else if (char.IsLetterOrDigit(ch))
+			{
+				if (!inWord)
+				{
+					n++;
+				}
+				inWord = true;
+			}
+			else if (ch != '\'' && ch != '-')
+			{
+				inWord = false;
+			}
+		}
+		return n;
 	}
 
 	private static string SinglePrompt(string target) => "你是游戏 mod 社区（N 网）的翻译。把用户给的文字翻译成" + LangName(target) + "。保留换行、数字、版本号、文件名和链接；mod 名、游戏专有名词可以保留原文，或在译名后用括号注明原文。只输出译文，不要解释，不要加引号。";
@@ -537,19 +620,46 @@ public static class Translator
 			throw new InvalidOperationException("没有填写 DeepSeek API Key");
 		}
 		var map = new Dictionary<string, string>();
-		// 多段合成一次请求：评论区几十段只要几次请求
-		await Task.WhenAll(Batches(texts, 20, 5000).Select(async b =>
+		// DeepSeek：短的关掉思考（快、便宜），超过设定词数的长文才开；两组分开发
+		var groups = new List<(LlmOptions Opt, List<string> Texts)>();
+		if (engine == "deepseek")
 		{
+			Func<string, bool> think = o.ThinkMode switch
+			{
+				"on" => _ => true,
+				"off" => _ => false,
+				_ => t => Words(t) > o.ThinkWords
+			};
+			var deep = texts.Where(think).ToList();
+			var quick = texts.Where(t => !think(t)).ToList();
+			if (quick.Count > 0)
+			{
+				groups.Add((o.With(false), quick));
+			}
+			if (deep.Count > 0)
+			{
+				groups.Add((o.With(true), deep));
+			}
+		}
+		else
+		{
+			groups.Add((o, texts));
+		}
+		// 多段合成一次请求：评论区几十段只要几次请求
+		await Task.WhenAll(groups.SelectMany(g => Batches(g.Texts, 20, 5000).Select(b => (g.Opt, b))).Select(async x =>
+		{
+			LlmOptions opt = x.Opt;
+			List<string> b = x.b;
 			if (b.Count == 1)
 			{
-				string one = await ChatAsync(o, SinglePrompt(target), b[0], texts.Count == 1 ? partial : null).ConfigureAwait(false);
+				string one = await ChatAsync(opt, SinglePrompt(target), b[0], texts.Count == 1 ? partial : null).ConfigureAwait(false);
 				lock (map)
 				{
 					map[b[0]] = one;
 				}
 				return;
 			}
-			JArray arr = ParseArray(await ChatAsync(o, BatchPrompt(target), JsonConvert.SerializeObject(b), null).ConfigureAwait(false));
+			JArray arr = ParseArray(await ChatAsync(opt, BatchPrompt(target), JsonConvert.SerializeObject(b), null).ConfigureAwait(false));
 			if (arr != null && arr.Count == b.Count)
 			{
 				lock (map)
@@ -564,7 +674,7 @@ public static class Translator
 			Logger.Log("批量翻译返回的条数对不上，改成逐段翻译（" + b.Count + " 段）");
 			foreach (string t in b)
 			{
-				string one = await ChatAsync(o, SinglePrompt(target), t, null).ConfigureAwait(false);
+				string one = await ChatAsync(opt, SinglePrompt(target), t, null).ConfigureAwait(false);
 				lock (map)
 				{
 					map[t] = one;
@@ -621,7 +731,19 @@ public static class Translator
 				["stream"] = o.Stream,
 				["messages"] = new JArray(new JObject { ["role"] = "system", ["content"] = system }, new JObject { ["role"] = "user", ["content"] = user })
 			};
-			if (o.Model.IndexOf("reasoner", StringComparison.OrdinalIgnoreCase) < 0)
+			if (o.Think == true)
+			{
+				// DeepSeek 思考模式：temperature 不起作用，强度用 reasoning_effort
+				payload["thinking"] = new JObject { ["type"] = "enabled" };
+				payload["reasoning_effort"] = o.Effort;
+			}
+			else if (o.Think == false)
+			{
+				// DeepSeek 默认是开思考的，要明确关掉
+				payload["thinking"] = new JObject { ["type"] = "disabled" };
+				payload["temperature"] = 0.2;
+			}
+			else if (o.Model.IndexOf("reasoner", StringComparison.OrdinalIgnoreCase) < 0)
 			{
 				payload["temperature"] = 0.2;
 			}

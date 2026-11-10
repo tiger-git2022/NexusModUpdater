@@ -41,7 +41,19 @@ public sealed class Config
 
 	public string DeepSeekKey = "";
 
-	/// <summary>DeepSeek 深度思考（deepseek-reasoner）；翻译一般不需要。</summary>
+	/// <summary>DeepSeek 模型：deepseek-flash（便宜、快）/ deepseek-v4-pro（更强、更贵），也可以填新出的模型名。</summary>
+	public string DeepSeekModel = "deepseek-flash";
+
+	/// <summary>DeepSeek 思考模式：off 关闭 / auto 长文才开 / on 总是开。</summary>
+	public string DeepSeekThink;
+
+	/// <summary>auto 时，超过这么多词（中日文按字数）才开思考。</summary>
+	public int DeepSeekThinkWords = 300;
+
+	/// <summary>思考强度：low / high / max。</summary>
+	public string DeepSeekEffort = "high";
+
+	/// <summary>1.0.2 的开关，只用来迁移到 DeepSeekThink。</summary>
 	public bool DeepSeekThinking = false;
 
 	/// <summary>大模型翻译用流式输出。</summary>
@@ -64,11 +76,11 @@ public sealed class Config
 	/// <summary>N网页面（评论区、简介）打开时自动翻译。</summary>
 	public bool TranslateSite = true;
 
-	public string OpenAiBase = "https://api.deepseek.com/v1";
+	public string OpenAiBase = "https://api.deepseek.com";
 
 	public string OpenAiKey = "";
 
-	public string OpenAiModel = "deepseek-chat";
+	public string OpenAiModel = "deepseek-flash";
 
 	/// <summary>从网页的下载记录读取已下载的 mod（需要在「N网」页登录）。</summary>
 	public bool UseHistory = true;
@@ -109,6 +121,24 @@ public sealed class Config
 				{
 					c.TranslateEngine = "mymemory";
 				}
+				// 1.0.2 用的 deepseek-chat / deepseek-reasoner 已停用，改成现在的模型名和 thinking 参数
+				if (c.DeepSeekThink != "off" && c.DeepSeekThink != "auto" && c.DeepSeekThink != "on")
+				{
+					c.DeepSeekThink = c.DeepSeekThinking ? "on" : "auto";
+				}
+				if (string.IsNullOrWhiteSpace(c.DeepSeekModel))
+				{
+					c.DeepSeekModel = "deepseek-flash";
+				}
+				if (c.DeepSeekEffort != "low" && c.DeepSeekEffort != "high" && c.DeepSeekEffort != "max")
+				{
+					c.DeepSeekEffort = "high";
+				}
+				c.DeepSeekThinkWords = Math.Max(1, c.DeepSeekThinkWords);
+				if ((c.OpenAiBase ?? "").IndexOf("deepseek.com", StringComparison.OrdinalIgnoreCase) >= 0 && (c.OpenAiModel == "deepseek-chat" || c.OpenAiModel == "deepseek-reasoner"))
+				{
+					c.OpenAiModel = "deepseek-flash";
+				}
 				return c;
 			}
 		}
@@ -116,7 +146,7 @@ public sealed class Config
 		{
 			Logger.Log("读取设置失败，使用默认设置：" + ex.Message);
 		}
-		return new Config();
+		return new Config { DeepSeekThink = "auto" };
 	}
 
 	public void Save(string path)

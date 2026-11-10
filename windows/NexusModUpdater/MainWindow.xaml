@@ -194,15 +194,58 @@
                                     <ui:Button Content="申请…" Click="KeyHelp_Click"/>
                                 </StackPanel>
                             </ui:CardControl>
-                            <ui:CardControl x:Name="ThinkCard" Icon="{ui:SymbolIcon Brain24}" Visibility="Collapsed">
-                                <ui:CardControl.Header>
-                                    <StackPanel>
-                                        <TextBlock Text="深度思考"/>
-                                        <TextBlock Text="关闭：deepseek-chat，快、便宜，翻译用它就够了；打开：deepseek-reasoner，更慢更贵" Style="{StaticResource Muted}"/>
+                            <StackPanel x:Name="ThinkCard" Visibility="Collapsed">
+                                <ui:CardControl Icon="{ui:SymbolIcon Bot24}">
+                                    <ui:CardControl.Header>
+                                        <StackPanel>
+                                            <TextBlock Text="模型"/>
+                                            <TextBlock Text="deepseek-flash 便宜、快，翻译够用；deepseek-v4-pro 更强、贵几倍。有新模型可以直接输入名字" Style="{StaticResource Muted}"/>
+                                        </StackPanel>
+                                    </ui:CardControl.Header>
+                                    <ComboBox x:Name="DeepSeekModel" MinWidth="200" IsEditable="True" LostFocus="LlmOption_Click" SelectionChanged="LlmOption_Click">
+                                        <ComboBoxItem Content="deepseek-flash"/>
+                                        <ComboBoxItem Content="deepseek-v4-pro"/>
+                                    </ComboBox>
+                                </ui:CardControl>
+                                <ui:CardControl Icon="{ui:SymbolIcon Brain24}">
+                                    <ui:CardControl.Header>
+                                        <StackPanel>
+                                            <TextBlock Text="思考模式"/>
+                                            <TextBlock Text="思考模式翻长文更通顺，但更慢、输出更多（更贵）；短评论关掉就够了" Style="{StaticResource Muted}"/>
+                                        </StackPanel>
+                                    </ui:CardControl.Header>
+                                    <ComboBox x:Name="DeepSeekThink" MinWidth="200" SelectionChanged="LlmOption_Click">
+                                        <ComboBoxItem Content="关闭" Tag="off"/>
+                                        <ComboBoxItem Content="长文才开（按词数）" Tag="auto"/>
+                                        <ComboBoxItem Content="总是开" Tag="on"/>
+                                    </ComboBox>
+                                </ui:CardControl>
+                                <ui:CardControl x:Name="ThinkWordsCard" Icon="{ui:SymbolIcon TextWordCount24}">
+                                    <ui:CardControl.Header>
+                                        <StackPanel>
+                                            <TextBlock Text="超过多少词开思考"/>
+                                            <TextBlock Text="每段单独算：英文等按单词数，中日文按字数。没超过的照常不思考" Style="{StaticResource Muted}"/>
+                                        </StackPanel>
+                                    </ui:CardControl.Header>
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:TextBox x:Name="DeepSeekThinkWords" Width="100" PlaceholderText="300" LostFocus="LlmOption_Click"/>
+                                        <TextBlock Text="词" VerticalAlignment="Center" Margin="8,0,0,0"/>
                                     </StackPanel>
-                                </ui:CardControl.Header>
-                                <ui:ToggleSwitch x:Name="DeepSeekThinking" Click="LlmOption_Click"/>
-                            </ui:CardControl>
+                                </ui:CardControl>
+                                <ui:CardControl x:Name="EffortCard" Icon="{ui:SymbolIcon Gauge24}">
+                                    <ui:CardControl.Header>
+                                        <StackPanel>
+                                            <TextBlock Text="思考强度"/>
+                                            <TextBlock Text="越高想得越久、越贵；默认 high" Style="{StaticResource Muted}"/>
+                                        </StackPanel>
+                                    </ui:CardControl.Header>
+                                    <ComboBox x:Name="DeepSeekEffort" MinWidth="200" SelectionChanged="LlmOption_Click">
+                                        <ComboBoxItem Content="low（低）" Tag="low"/>
+                                        <ComboBoxItem Content="high（高）" Tag="high"/>
+                                        <ComboBoxItem Content="max（最高）" Tag="max"/>
+                                    </ComboBox>
+                                </ui:CardControl>
+                            </StackPanel>
                             <ui:CardControl x:Name="StreamCard" Icon="{ui:SymbolIcon TextBulletListLtr24}" Visibility="Collapsed">
                                 <ui:CardControl.Header>
                                     <StackPanel>
@@ -232,13 +275,13 @@
                             </ui:CardControl>
                             <StackPanel x:Name="OpenAiPanel" Visibility="Collapsed">
                                 <ui:CardControl Icon="{ui:SymbolIcon Server24}" Header="接口地址">
-                                    <ui:TextBox x:Name="OpenAiBase" Width="360" PlaceholderText="https://api.deepseek.com/v1" LostFocus="OpenAi_LostFocus"/>
+                                    <ui:TextBox x:Name="OpenAiBase" Width="360" PlaceholderText="http://127.0.0.1:11434/v1" LostFocus="OpenAi_LostFocus"/>
                                 </ui:CardControl>
                                 <ui:CardControl Icon="{ui:SymbolIcon Key24}" Header="接口 Key">
                                     <ui:PasswordBox x:Name="OpenAiKey" Width="360" LostFocus="OpenAi_LostFocus"/>
                                 </ui:CardControl>
                                 <ui:CardControl Icon="{ui:SymbolIcon Bot24}" Header="模型">
-                                    <ui:TextBox x:Name="OpenAiModel" Width="360" PlaceholderText="deepseek-chat" LostFocus="OpenAi_LostFocus"/>
+                                    <ui:TextBox x:Name="OpenAiModel" Width="360" PlaceholderText="qwen3:8b" LostFocus="OpenAi_LostFocus"/>
                                 </ui:CardControl>
                             </StackPanel>
                             <ui:CardControl Icon="{ui:SymbolIcon LocalLanguage24}" Header="翻译成">
