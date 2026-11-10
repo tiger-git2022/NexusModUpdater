@@ -179,6 +179,12 @@ public sealed class AppView : Grid
 		}
 	}
 
+	/// <summary>左侧导航切到「下载」或回到「Mod 更新」。</summary>
+	public void ShowView(string view)
+	{
+		Post(new JObject { ["event"] = "view", ["view"] = view });
+	}
+
 	public void PostTheme()
 	{
 		Post(new JObject { ["event"] = "theme", ["theme"] = Dark() ? "dark" : "light", ["accent"] = AccentHex() });
@@ -415,6 +421,10 @@ public sealed class AppView : Grid
 			return Engine.StatusJson();
 		case "counts":
 			_main.SetUpdateCount(a.Value<int>("updates"));
+			_main.SetDownloadCount(a.Value<int?>("downloads") ?? 0);
+			return true;
+		case "navState":
+			_main.SetAppView(a.Value<string>("view"));
 			return true;
 		default:
 			throw new InvalidOperationException("未知方法 " + method);

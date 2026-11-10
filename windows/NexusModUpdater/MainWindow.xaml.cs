@@ -55,7 +55,12 @@ public partial class MainWindow : FluentWindow
 			Store.SaveConfig();
 		};
 		ApplicationThemeManager.Changed += OnThemeChanged;
-		Closed += delegate { ApplicationThemeManager.Changed -= OnThemeChanged; };
+		Microsoft.Win32.SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+		Closed += delegate
+		{
+			ApplicationThemeManager.Changed -= OnThemeChanged;
+			Microsoft.Win32.SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+		};
 		ApplyAppearance();
 		_ready = true;
 		SelectPage(0);
@@ -114,12 +119,42 @@ public partial class MainWindow : FluentWindow
 
 	// ---- 页面 ----
 
+	/// <summary>第一页（网页）现在显示的是 mod 列表还是下载页，决定左侧亮哪个。</summary>
+	private string _appView = "mods";
+
 	private void Nav_Click(object sender, RoutedEventArgs e)
 	{
-		if (sender is FrameworkElement fe && int.TryParse(fe.Tag?.ToString(), out int page))
+		string tag = (sender as FrameworkElement)?.Tag?.ToString();
+		if (tag == "dl")
 		{
+			_appView = "downloads";
+			_app.ShowView("downloads");
+			SelectPage(0);
+		}
+		else if (int.TryParse(tag, out int page))
+		{
+			if (page == 0 && _appView == "downloads")
+			{
+				_appView = "mods";
+				_app.ShowView("mods");
+			}
 			SelectPage(page);
 		}
+	}
+
+	public void SetAppView(string view)
+	{
+		_appView = view == "downloads" ? "downloads" : "mods";
+		if (_page == 0)
+		{
+			SelectPage(0);
+		}
+	}
+
+	public void SetDownloadCount(int n)
+	{
+		NavDlBadge.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
+		NavDlCount.Text = n > 99 ? "99+" : n.ToString();
 	}
 
 	public void SelectPage(int page)
@@ -129,11 +164,12 @@ public partial class MainWindow : FluentWindow
 		{
 			_pages[i].Visibility = i == page ? Visibility.Visible : Visibility.Collapsed;
 		}
-		for (int i = 0; i < Nav.Children.Count; i++)
+		string active = page == 0 && _appView == "downloads" ? "dl" : page.ToString();
+		foreach (object child in Nav.Children)
 		{
-			if (Nav.Children[i] is Button b)
+			if (child is Button b)
 			{
-				b.Appearance = i == page ? ControlAppearance.Secondary : ControlAppearance.Transparent;
+				b.Appearance = b.Tag?.ToString() == active ? ControlAppearance.Secondary : ControlAppearance.Transparent;
 			}
 		}
 		if (page == 1)
@@ -679,22 +715,9 @@ public partial class MainWindow : FluentWindow
 	{
 		Config cfg = Store.Cfg;
 		WindowBackdropType backdrop = cfg.Backdrop == "mica" ? WindowBackdropType.Mica : (cfg.Backdrop == "none" ? WindowBackdropType.None : WindowBackdropType.Acrylic);
-		try
-		{
-			SystemThemeWatcher.UnWatch(this);
-		}
-		catch
-		{
-		}
-		if (cfg.Theme == "light" || cfg.Theme == "dark")
-		{
-			ApplicationThemeManager.Apply(cfg.Theme == "dark" ? ApplicationTheme.Dark : ApplicationTheme.Light, backdrop, updateAccent: true);
-		}
-		else
-		{
-			ApplicationThemeManager.ApplySystemTheme(updateAccent: true);
-			SystemThemeWatcher.Watch(this, backdrop, updateAccents: true);
-		}
+		// 跟随系统时自己读 Windows 的「应用使用浅色主题」开关，不用 WPF-UI 的监听器：
+		// 它在壁纸、强调色变化时也会重新判断，偶尔会把深色系统判成浅色
+		ApplicationThemeManager.Apply(Program.WantDark() ? ApplicationTheme.Dark : ApplicationTheme.Light, backdrop, updateAccent: true);
 		WindowBackdropType = backdrop;
 		UpdateTint();
 	}
@@ -705,10 +728,37 @@ public partial class MainWindow : FluentWindow
 		bool acrylic = cfg.Backdrop == "acrylic";
 		bool dark = ApplicationThemeManager.GetAppTheme() == ApplicationTheme.Dark;
 		Tint.Fill = new SolidColorBrush(dark ? Color.FromRgb(0x20, 0x20, 0x20) : Color.FromRgb(0xF3, 0xF3, 0xF3));
+		// 和网页里的徽标一样：深色时浅橙底黑字，浅色时深橙底白字
+		NavBadge.Background = new SolidColorBrush(dark ? Color.FromRgb(0xF0, 0xA0, 0x50) : Color.FromRgb(0xC2, 0x5E, 0x00));
+		NavCount.Foreground = dark ? new SolidColorBrush(Color.FromArgb(0xE6, 0, 0, 0)) : Brushes.White;
+		NavSiteDot.Background = NavBadge.Background;
+		NavDlBadge.Background = NavBadge.Background;
+		NavDlCount.Foreground = NavCount.Foreground;
 		Tint.Opacity = acrylic ? cfg.TintPercent / 100.0 : 0.0;
 		PageLayer.Background = acrylic ? Brushes.Transparent : (Brush)FindResource("LayerFillColorDefaultBrush");
 		TintCard.Visibility = acrylic ? Visibility.Visible : Visibility.Collapsed;
 		TintText.Text = cfg.TintPercent + "%";
+	}
+
+	/// <summary>系统设置变了（深浅色、强调色、壁纸等）：只有深浅色或强调色真的变了才重新套用。</summary>
+	private void OnUserPreferenceChanged(object sender, Microsoft.Win32.UserPreferenceChangedEventArgs e)
+	{
+		Dispatcher.BeginInvoke((Action)delegate
+		{
+			bool dark = ApplicationThemeManager.GetAppTheme() == ApplicationTheme.Dark;
+			if (Program.WantDark() != dark)
+			{
+				ApplyAppearance();
+				return;
+			}
+			Color before = ApplicationAccentColorManager.PrimaryAccent;
+			ApplicationAccentColorManager.ApplySystemAccent();
+			if (ApplicationAccentColorManager.PrimaryAccent != before)
+			{
+				_app.PostTheme();
+				_site.PostTheme();
+			}
+		});
 	}
 
 	private void OnThemeChanged(ApplicationTheme theme, Color accent)
@@ -787,13 +837,13 @@ public partial class MainWindow : FluentWindow
 		AppUpdateButton.IsEnabled = false;
 		try
 		{
-			string zip = await Updater.DownloadAsync(_appUpdate, new Progress<int>(p =>
+			string newExe = await Updater.DownloadAsync(_appUpdate, new Progress<int>(p =>
 			{
 				AppUpdateText.Text = "正在下载 v" + _appUpdate.Version + "… " + p + "%";
 				UpdateState.Text = AppUpdateText.Text;
 			}));
 			Store.SaveNow();
-			Updater.StartInstall(zip);
+			Updater.StartInstall(newExe);
 			Application.Current.Shutdown();
 		}
 		catch (Exception ex)

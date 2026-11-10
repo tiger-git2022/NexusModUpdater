@@ -73,10 +73,11 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          Get-ChildItem out -Recurse -Include *.pdb | Remove-Item -Force
-          Copy-Item README.md, LICENSE, CHANGELOG.md out/
-          $zip = "dist/NexusModUpdater-v$env:VERSION-win-x64.zip"
-          Compress-Archive -Path out/* -DestinationPath $zip
+          # 发布一个单独的 exe（依赖由 Costura 打包在里面）；输出目录里有别的文件说明打包出了问题
+          $extra = Get-ChildItem out -Recurse -File | Where-Object { $_.Name -ne "NexusModUpdater.exe" }
+          if ($extra) { Write-Error ("输出目录里除了 exe 还有：" + ($extra.Name -join ", ")); exit 1 }
+          $asset = "dist/NexusModUpdater.exe"
+          Copy-Item out/NexusModUpdater.exe $asset
           # update.json：程序从 releases/latest/download/update.json 读新版本，格式和 GitHub 接口的发布信息一样，
           # 这样不占接口每个 IP 每小时 60 次的额度。说明取 CHANGELOG.md 里本版本那一节。
           $lines = Get-Content CHANGELOG.md -Encoding utf8
@@ -89,7 +90,7 @@ jobs:
             $notes = ($body -join "`n").Trim()
           }
           $tag = "v$env:VERSION"
-          $name = Split-Path $zip -Leaf
+          $name = Split-Path $asset -Leaf
           $base = "https://github.com/${{ github.repository }}/releases"
           [ordered]@{
             tag_name = $tag
@@ -97,8 +98,8 @@ jobs:
             body = $notes
             assets = @([ordered]@{
               name = $name
-              size = (Get-Item $zip).Length
-              digest = "sha256:" + (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+              size = (Get-Item $asset).Length
+              digest = "sha256:" + (Get-FileHash $asset -Algorithm SHA256).Hash.ToLowerInvariant()
               browser_download_url = "$base/download/$tag/$name"
             })
           } | ConvertTo-Json -Depth 4 | Set-Content dist/update.json -Encoding utf8NoBOM
@@ -109,7 +110,7 @@ jobs:
         with:
           name: NexusModUpdater-win-x64
           path: |
-            dist/*.zip
+            dist/NexusModUpdater.exe
             dist/update.json
 
       - name: Release
@@ -119,6 +120,6 @@ jobs:
           tag_name: v${{ env.VERSION }}
           target_commitish: ${{ github.sha }}
           files: |
-            dist/*.zip
+            dist/NexusModUpdater.exe
             dist/update.json
           generate_release_notes: true

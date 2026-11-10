@@ -46,6 +46,8 @@ public sealed class DownloadJob
 
 	public long CreatedAt = Store.Now;
 
+	public long FinishedAt;
+
 	public string Path = "";
 
 	internal string NxmKey;
@@ -58,8 +60,10 @@ public sealed class DownloadJob
 
 	internal readonly CancellationTokenSource Cts = new CancellationTokenSource();
 
+	[Newtonsoft.Json.JsonIgnore]
 	public string Key => Store.Key(Domain, ModId);
 
+	[Newtonsoft.Json.JsonIgnore]
 	public bool Finished => Status == "done" || Status == "failed" || Status == "canceled";
 
 	public JObject ToJson() => new JObject
@@ -80,6 +84,7 @@ public sealed class DownloadJob
 		["total"] = Total,
 		["speed"] = Speed,
 		["createdAt"] = CreatedAt,
+		["finishedAt"] = FinishedAt,
 		["path"] = Path
 	};
 }
@@ -97,6 +102,44 @@ public static class Downloader
 	private static readonly SemaphoreSlim BrowserGate = new SemaphoreSlim(1);
 
 	private static readonly HttpClient Http = CreateClient();
+
+	/// <summary>下载记录最多留这么多条。</summary>
+	private const int HistoryMax = 300;
+
+	// 启动时把保存的下载记录放回列表
+	static Downloader()
+	{
+		lock (Store.Lock)
+		{
+			Store.St.Downloads ??= new List<DownloadJob>();
+			Jobs.AddRange(Store.St.Downloads.Where(j => j.Finished));
+		}
+	}
+
+	/// <summary>任务结束时记进下载记录（保存在 nmu.state.json 里）。</summary>
+	private static void Remember(DownloadJob job)
+	{
+		if (job.FinishedAt == 0)
+		{
+			job.FinishedAt = Store.Now;
+		}
+		lock (Store.Lock)
+		{
+			List<DownloadJob> list = Store.St.Downloads ??= new List<DownloadJob>();
+			list.RemoveAll(j => j.Id == job.Id);
+			list.Insert(0, job);
+			if (list.Count > HistoryMax)
+			{
+				list.RemoveRange(HistoryMax, list.Count - HistoryMax);
+			}
+		}
+		lock (Jobs)
+		{
+			List<DownloadJob> old = Jobs.Where(j => j.Finished).OrderByDescending(j => j.FinishedAt).Skip(HistoryMax).ToList();
+			Jobs.RemoveAll(old.Contains);
+		}
+		Store.SaveSoon();
+	}
 
 	/// <summary>任务有变化（在任意线程触发）。</summary>
 	public static event Action<DownloadJob> Changed;
@@ -137,10 +180,19 @@ public static class Downloader
 		{
 			Jobs.RemoveAll(j => j.Finished);
 		}
+		lock (Store.Lock)
+		{
+			Store.St.Downloads?.Clear();
+		}
+		Store.SaveSoon();
 	}
 
 	private static void Raise(DownloadJob job)
 	{
+		if (job.Finished)
+		{
+			Remember(job);
+		}
 		try
 		{
 			Changed?.Invoke(job);
@@ -213,6 +265,10 @@ public static class Downloader
 				return;
 			}
 			Jobs.Remove(job);
+		}
+		lock (Store.Lock)
+		{
+			Store.St.Downloads?.RemoveAll(j => j.Id == job.Id);
 		}
 		Enqueue(job.Domain, job.ModId, new NexusFile { FileId = job.FileId, FileName = job.FileName, Name = job.FileTitle, Version = job.Version, Uploaded = job.Uploaded, SizeKb = job.Total / 1024 }, job.ModName);
 	}

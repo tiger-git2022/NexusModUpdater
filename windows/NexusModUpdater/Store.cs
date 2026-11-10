@@ -228,6 +228,9 @@ public sealed class State
 
 	public Dictionary<string, string> LocalFileNames = new Dictionary<string, string>();
 
+	/// <summary>下载记录（结束了的下载任务，新的在前）。</summary>
+	public List<DownloadJob> Downloads = new List<DownloadJob>();
+
 	/// <summary>mod 文件夹里认出来的 mod：key → 位置和版本。</summary>
 	public Dictionary<string, LocalFound> Found = new Dictionary<string, LocalFound>();
 
