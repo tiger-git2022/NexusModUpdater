@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Windows;
+using Wpf.Ui.Controls;
 using Forms = System.Windows.Forms;
 
 namespace NexusModUpdater;
@@ -15,25 +18,24 @@ public partial class MainWindow
 
 	private const string TrayTitle = "N网 Mod 更新";
 
+	private readonly TrayMenu _trayMenu = new TrayMenu();
+
 	private void InitTray()
 	{
-		var menu = new Forms.ContextMenuStrip();
-		var open = new Forms.ToolStripMenuItem("打开", null, delegate { BringToFront(); });
-		open.Font = new System.Drawing.Font(open.Font, System.Drawing.FontStyle.Bold);
-		menu.Items.Add(open);
-		menu.Items.Add(new Forms.ToolStripMenuItem("下载", null, delegate
-		{
-			BringToFront();
-			ShowDownloads();
-		}));
-		menu.Items.Add(new Forms.ToolStripSeparator());
-		menu.Items.Add(new Forms.ToolStripMenuItem("退出", null, delegate { ExitApp(); }));
-		_tray = new Forms.NotifyIcon { Text = TrayTitle, Icon = TrayIcon(), ContextMenuStrip = menu };
+		_tray = new Forms.NotifyIcon { Text = TrayTitle, Icon = TrayIcon() };
 		_tray.MouseClick += (s, e) =>
 		{
 			if (e.Button == Forms.MouseButtons.Left)
 			{
 				BringToFront();
+			}
+		};
+		// 右键菜单和 WE 加权轮播一样：亚克力背景、圆角、Fluent 图标、跟随深浅色
+		_tray.MouseUp += (s, e) =>
+		{
+			if (e.Button == Forms.MouseButtons.Right)
+			{
+				ShowTrayMenu();
 			}
 		};
 		_tray.BalloonTipClicked += delegate { BringToFront(); };
@@ -53,6 +55,37 @@ public partial class MainWindow
 			string name = job.ModName != "" ? job.ModName : job.FileName;
 			_tray.ShowBalloonTip(4000, job.Status == "done" ? "已更新" : "下载失败", name + (job.Status == "failed" && job.Message != "" ? "：" + job.Message : ""), job.Status == "done" ? Forms.ToolTipIcon.Info : Forms.ToolTipIcon.Warning);
 		});
+	}
+
+	private void ShowTrayMenu()
+	{
+		try
+		{
+			int downloading = Downloader.All().Count(j => !j.Finished);
+			var entries = new List<TrayMenu.Entry>
+			{
+				new TrayMenu.Entry { Text = downloading > 0 ? downloading + " 个下载中" : "没有正在下载的文件", Enabled = false, Icon = SymbolRegular.ArrowDownload24 },
+				new TrayMenu.Entry { Separator = true },
+				new TrayMenu.Entry { Text = "打开主界面", Bold = true, Icon = SymbolRegular.Home24, Click = BringToFront },
+				new TrayMenu.Entry { Text = "下载", Icon = SymbolRegular.ArrowDownload24, Click = () => { BringToFront(); ShowDownloads(); } },
+				new TrayMenu.Entry
+				{
+					Text = Engine.Syncing ? "正在检查更新…" : "检查更新",
+					Enabled = !Engine.Syncing,
+					Icon = SymbolRegular.ArrowSync24,
+					Click = () => _ = Engine.SyncAsync(Store.Cfg.LastGame),
+				},
+				new TrayMenu.Entry { Text = "N网", Icon = SymbolRegular.Globe24, Click = () => { BringToFront(); SelectPage(1); } },
+				new TrayMenu.Entry { Text = "设置…", Icon = SymbolRegular.Settings24, Click = () => { BringToFront(); SelectPage(2); } },
+				new TrayMenu.Entry { Separator = true },
+				new TrayMenu.Entry { Text = "退出", Icon = SymbolRegular.Power24, Click = ExitApp },
+			};
+			_trayMenu.Show(entries);
+		}
+		catch (Exception ex)
+		{
+			Logger.Log("托盘菜单打开失败：" + ex);
+		}
 	}
 
 	private static System.Drawing.Icon TrayIcon()
