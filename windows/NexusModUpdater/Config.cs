@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Newtonsoft.Json;
 
@@ -21,6 +22,9 @@ public sealed class GameSetting
 
 	/// <summary>更新时把旧版本移到回收站。</summary>
 	public bool RemoveOld = true;
+
+	/// <summary>自己起的显示名（比如中文名）；空 = 自动。</summary>
+	public string Alias = "";
 }
 
 /// <summary>全部设置，存在 exe 旁边的 nmu.config.json。</summary>
@@ -97,6 +101,12 @@ public sealed class Config
 
 	public Dictionary<string, GameSetting> Games = new Dictionary<string, GameSetting>(StringComparer.OrdinalIgnoreCase);
 
+	/// <summary>上次看的游戏（域名），下次打开直接进这个游戏；空 = 显示游戏列表。</summary>
+	public string LastGame = "";
+
+	/// <summary>快速切换栏里的游戏，按添加顺序。</summary>
+	public List<string> QuickGames = new List<string>();
+
 	public GameSetting Game(string domain)
 	{
 		if (!Games.TryGetValue(domain, out GameSetting g))
@@ -116,6 +126,8 @@ public sealed class Config
 				Config c = JsonConvert.DeserializeObject<Config>(File.ReadAllText(path, Encoding.UTF8)) ?? new Config();
 				c.Games = new Dictionary<string, GameSetting>(c.Games ?? new Dictionary<string, GameSetting>(), StringComparer.OrdinalIgnoreCase);
 				c.TintPercent = Math.Max(0, Math.Min(100, c.TintPercent));
+				c.QuickGames = (c.QuickGames ?? new List<string>()).Where(d => !string.IsNullOrWhiteSpace(d)).Select(d => d.ToLowerInvariant()).Distinct().ToList();
+				c.LastGame = (c.LastGame ?? "").ToLowerInvariant();
 				// 1.0.0 的 bing（非官方接口）已去掉；1.0.1 的“还没设置”改成默认的免费翻译
 				if (string.IsNullOrEmpty(c.TranslateEngine) || c.TranslateEngine == "bing")
 				{

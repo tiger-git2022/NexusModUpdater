@@ -43,8 +43,48 @@ a:hover { text-decoration: underline; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--fg3); border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
 
-#app { display: grid; grid-template-rows: auto auto 1fr; height: 100vh; }
-#top { display: flex; align-items: center; gap: 8px; padding: 12px 18px 8px; flex-wrap: nowrap; }
+#app { display: flex; flex-direction: column; height: 100vh; }
+#app > [hidden] { display: none !important; }
+
+/* 快速切换栏 */
+#gbar { display: flex; align-items: center; gap: 6px; padding: 10px 18px 0; overflow-x: auto; flex-shrink: 0; scrollbar-width: thin; }
+.gchip { display: flex; align-items: center; gap: 8px; padding: 3px 10px 3px 3px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--fg2); flex-shrink: 0; max-width: 240px; }
+.gchip:hover { background: var(--hover); color: var(--fg); }
+.gchip.on { border-color: var(--accent); background: var(--hover); color: var(--fg); font-weight: 600; }
+.gchip.temp { border-style: dashed; }
+.gchip .gi { width: 22px; height: 33px; border-radius: 3px; background: var(--thumb) center/cover no-repeat; flex-shrink: 0; }
+.gchip .gt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gchip .count { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--new); color: #fff; font-size: 11px; line-height: 18px; text-align: center; font-weight: 600; }
+#gbar .back { flex-shrink: 0; }
+#gbar .add { flex-shrink: 0; border-style: dashed; color: var(--fg2); }
+
+/* 游戏列表 */
+#gtop { display: flex; align-items: center; gap: 8px; padding: 14px 18px 8px; flex-shrink: 0; }
+#gtop h2 { margin: 0 8px 0 0; font-size: 20px; font-weight: 600; }
+#gsearch { width: 260px; }
+#gmain { flex: 1; min-height: 0; overflow: auto; padding: 0 18px 30px; }
+.gsec { display: flex; align-items: baseline; gap: 8px; margin: 14px 2px 10px; font-weight: 600; }
+.gsec .muted { font-weight: 400; font-size: 12px; }
+.ggrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+.gcard { border-radius: 8px; background: var(--card); border: 1px solid transparent; cursor: pointer; overflow: hidden; position: relative; }
+.gcard:hover { background: var(--hover); border-color: var(--line); }
+.gcard.cur { border-color: var(--accent); }
+.gcover { aspect-ratio: 2 / 3; background: var(--thumb) center/cover no-repeat; position: relative; display: flex; align-items: center; justify-content: center; }
+.gcover .ph { font-size: 28px; font-weight: 700; color: var(--fg3); }
+.gcover .chip { position: absolute; left: 8px; top: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+.gpin { position: absolute; right: 6px; top: 6px; border: 0; background: rgba(0,0,0,.55); color: #fff; border-radius: 4px; padding: 1px 8px; font-size: 13px; opacity: 0; }
+.gpin:hover { background: rgba(0,0,0,.75); }
+.gcard:hover .gpin, .gpin.on { opacity: 1; }
+.gpin.on { color: #ffd54a; }
+.gname { padding: 8px 10px 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gsub { padding: 0 10px 9px; font-size: 12px; color: var(--fg3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modal-bg { position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; }
+.modal { width: 380px; padding: 18px; border-radius: 8px; background: var(--solid); border: 1px solid var(--line); box-shadow: 0 12px 32px var(--shadow); }
+.modal h3 { margin: 0 0 6px; font-size: 16px; }
+.modal input { width: 100%; margin: 10px 0 14px; font: inherit; color: var(--fg); background: var(--ctl); border: 1px solid var(--ctlline); border-radius: 4px; padding: 6px 10px; outline: none; }
+.modal input:focus { border-bottom: 2px solid var(--accent); padding-bottom: 5px; }
+.modal .btns { display: flex; justify-content: flex-end; gap: 8px; }
+#top { display: flex; align-items: center; gap: 8px; padding: 10px 18px 8px; flex-wrap: nowrap; flex-shrink: 0; }
 .tabs { display: flex; gap: 4px; flex-shrink: 0; }
 .tab { border: 0; background: transparent; padding: 6px 12px; border-radius: 4px; color: var(--fg2); position: relative; }
 .tab:hover { background: var(--hover); }
@@ -60,7 +100,8 @@ a:hover { text-decoration: underline; }
 #syncBtn.spin svg { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-#notice { margin: 0 18px 8px; }
+#notice { margin: 0 18px 8px; flex-shrink: 0; }
+#notice:empty { margin-bottom: 0; }
 .banner { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--fg2); margin-bottom: 6px; }
 .banner .grow { flex: 1; }
 .banner.warn { border-color: rgba(252,225,0,.25); }
@@ -69,7 +110,7 @@ a:hover { text-decoration: underline; }
 .progress.indet > i { width: 30% !important; animation: indet 1.2s ease-in-out infinite; }
 @keyframes indet { 0% { left: -30%; } 100% { left: 100%; } }
 
-#body { display: grid; grid-template-columns: minmax(0, 1fr) 440px; min-height: 0; }
+#body { display: grid; grid-template-columns: minmax(0, 1fr) 440px; min-height: 0; flex: 1; }
 #body.nodetail { grid-template-columns: minmax(0, 1fr) 0; }
 #main { overflow: auto; padding: 0 12px 30px 18px; position: relative; }
 #detail { overflow: auto; margin: 0 12px 12px 0; border: 1px solid var(--line); border-radius: 8px; background: var(--card2); }
@@ -155,14 +196,26 @@ a:hover { text-decoration: underline; }
 </head>
 <body>
 <div id="app">
-  <div id="top">
+  <div id="gbar" hidden></div>
+  <div id="gtop" hidden>
+    <h2>选择游戏</h2>
+    <input type="search" id="gsearch" placeholder="搜索游戏（中文名、英文名）…">
+    <select id="gsort" title="排序">
+      <option value="recent">按最近下载</option>
+      <option value="updates">按更新数</option>
+      <option value="mods">按 mod 数</option>
+      <option value="name">按名字</option>
+    </select>
+    <span class="spacer"></span>
+    <button id="histBtn" title="重新读取 N 网下载记录（不检查各游戏的更新，不花接口次数）"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="vertical-align:-3px;margin-right:4px"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>刷新下载记录</button>
+  </div>
+  <div id="top" hidden>
     <div class="tabs">
       <button class="tab on" data-tab="updates">有更新<span class="count" id="cUpdates">0</span></button>
       <button class="tab" data-tab="all">全部<span class="count" id="cAll">0</span></button>
       <button class="tab" data-tab="ignored">已忽略<span class="count" id="cIgnored">0</span></button>
       <button class="tab" data-tab="jobs">下载<span class="count" id="cJobs">0</span></button>
     </div>
-    <select id="game" title="按游戏筛选"></select>
     <input type="search" id="search" placeholder="搜索名字、作者…">
     <select id="sort" title="排序">
       <option value="latest">按更新时间</option>
@@ -173,10 +226,11 @@ a:hover { text-decoration: underline; }
     <button id="syncBtn" class="primary" title="重新读取下载记录并检查更新"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>检查更新</button>
   </div>
   <div id="notice"></div>
-  <div id="body" class="nodetail">
+  <div id="body" class="nodetail" hidden>
     <div id="main"></div>
     <div id="detail"></div>
   </div>
+  <div id="gmain" hidden></div>
 </div>
 <div id="toasts"></div>
 <script>window.__nmuScope = '.tr-scope';</script>
@@ -211,6 +265,7 @@ chrome.webview.addEventListener('message', e => {
 
 // ---- 状态 ----
 const S = {
+  view: '', games: new Map(), gq: '', gsort: 'recent',
   tab: 'updates', game: '', q: '', sort: 'latest',
   mods: [], byKey: new Map(), status: {}, jobs: new Map(),
   sel: new Set(), detailKey: null, detail: null, dtab: 'files',
@@ -219,10 +274,10 @@ const S = {
 try {
   const saved = JSON.parse(localStorage.getItem('nmu.view') || '{}');
   if (saved.sort) S.sort = saved.sort;
-  if (saved.game != null) S.game = saved.game;
+  if (saved.gsort) S.gsort = saved.gsort;
 } catch (e) {}
 try { S.trHint = localStorage.getItem('nmu.trHint') === '1'; } catch (e) {}
-function saveView() { try { localStorage.setItem('nmu.view', JSON.stringify({ sort: S.sort, game: S.game })); } catch (e) {} }
+function saveView() { try { localStorage.setItem('nmu.view', JSON.stringify({ sort: S.sort, gsort: S.gsort })); } catch (e) {} }
 
 const params = new URLSearchParams(location.search);
 applyTheme(params.get('theme'), params.get('accent'));
@@ -316,8 +371,7 @@ function inTab(m, tab) {
 }
 function visible() {
   const q = S.q.trim().toLowerCase();
-  let list = S.mods.filter(m => inTab(m, S.tab));
-  if (S.game) list = list.filter(m => m.domain === S.game);
+  let list = gameMods().filter(m => inTab(m, S.tab));
   if (q) list = list.filter(m => (m.name + ' ' + (S.tr.get(m.name) || '') + ' ' + m.author + ' ' + m.modId + ' ' + m.game).toLowerCase().includes(q));
   const by = {
     latest: (a, b) => (b.latest || 0) - (a.latest || 0),
@@ -327,9 +381,12 @@ function visible() {
   list.sort(by);
   return list;
 }
+function gameMods() { return S.game ? S.mods.filter(m => m.domain === S.game) : []; }
+// 数字只算当前游戏
 function counts() {
-  const c = { updates: 0, all: S.mods.length, ignored: 0 };
-  S.mods.forEach(m => { if (inTab(m, 'updates')) c.updates++; if (m.ignore !== 'none') c.ignored++; });
+  const mods = gameMods();
+  const c = { updates: 0, all: mods.length, ignored: 0 };
+  mods.forEach(m => { if (inTab(m, 'updates')) c.updates++; if (m.ignore !== 'none') c.ignored++; });
   $('#cUpdates').textContent = c.updates;
   $('#cUpdates').classList.toggle('hot', c.updates > 0);
   $('#cAll').textContent = c.all;
@@ -339,20 +396,6 @@ function counts() {
   $('#cJobs').classList.toggle('hot', active > 0);
   call('counts', { updates: c.updates }).catch(() => {});
 }
-function gameOptions() {
-  const sel = $('#game');
-  const map = new Map();
-  S.mods.filter(m => inTab(m, S.tab === 'jobs' ? 'all' : S.tab)).forEach(m => {
-    const g = map.get(m.domain) || { name: m.game || m.domain, n: 0 };
-    g.n++;
-    map.set(m.domain, g);
-  });
-  const games = Array.from(map.entries()).sort((a, b) => b[1].n - a[1].n);
-  if (S.game && !map.has(S.game) && !S.mods.some(m => m.domain === S.game)) S.game = '';
-  sel.innerHTML = '<option value="">全部游戏</option>' + games.map(([d, g]) => '<option value="' + esc(d) + '"' + (d === S.game ? ' selected' : '') + '>' + esc(g.name) + '（' + g.n + '）</option>').join('');
-  if (S.game && !map.has(S.game)) sel.insertAdjacentHTML('beforeend', '<option value="' + esc(S.game) + '" selected>' + esc(S.game) + '（0）</option>');
-}
-
 function rowHtml(m) {
   const pic = m.picture ? '<img loading="lazy" src="' + esc(m.picture) + '" onerror="this.remove()">' : '';
   const name = trSpan(m.name);
@@ -373,7 +416,7 @@ function rowHtml(m) {
     '<div class="thumb">' + pic + '</div>' +
     '<div class="info"><div class="name">' + name + '<span class="orig"' + (tName ? '' : ' hidden') + '>' + esc(m.name) + '</span></div>' +
     '<div class="sum">' + sum + '</div>' +
-    '<div class="meta"><span>' + esc(m.game) + '</span>' + (m.author ? '<span>' + esc(m.author) + '</span>' : '') + (m.version ? '<span>v' + esc(m.version) + '</span>' : '') + when + '</div></div>' +
+    '<div class="meta">' + (m.author ? '<span>' + esc(m.author) + '</span>' : '') + (m.version ? '<span>v' + esc(m.version) + '</span>' : '') + when + '</div></div>' +
     '<div class="acts">' + chips.join('') +
     (m.hasUpdate && m.available ? '<button class="small primary act-update"' + (m.busy ? ' disabled' : '') + '>更新</button>' : '') +
     '<button class="small ghost act-menu" title="更多">⋯</button></div></div>';
@@ -385,16 +428,17 @@ function emptyHtml() {
     return '<div class="empty"><h2>欢迎</h2>还没有读到你下载过的 mod。按下面三步开始：<br><ol>' +
       '<li>' + (st.hasKey ? (st.keyValid ? '✓ API Key 已填写（' + esc(st.user) + '）' : 'API Key 还没验证通过') : '在 <a data-go="settings">设置</a> 里填写 N 网 API Key') + '</li>' +
       '<li>在「N网」页登录（用来读取你的 <a data-go="login">下载记录</a>）</li>' +
-      '<li>点右上角「检查更新」</li></ol><br><button class="primary" data-go="sync">检查更新</button></div>';
+      '<li>点「刷新下载记录」，再选一个游戏查看它的更新</li></ol><br><button class="primary" data-go="sync">刷新下载记录</button></div>';
   }
-  if (S.tab === 'updates') return '<div class="empty"><h2>全部是最新的</h2>' + (S.game ? '这个游戏' : '') + '没有需要更新的 mod。上次检查：' + ago(st.lastSync) + '</div>';
+  if (S.tab === 'updates') return '<div class="empty"><h2>全部是最新的</h2>《' + esc(gameName(S.game)) + '》没有需要更新的 mod。上次检查：' + ago(st.lastSync) + '<br><br><button class="primary" data-go="sync">检查更新</button></div>';
   if (S.tab === 'ignored') return '<div class="empty"><h2>没有忽略的 mod</h2>在 mod 右边的「⋯」里可以暂时忽略（下次有更新再提醒）或永久忽略。</div>';
   return '<div class="empty">没有符合条件的 mod</div>';
 }
 
 function renderList() {
   counts();
-  gameOptions();
+  renderGbar();
+  if (S.view === 'games') { renderGames(); return; }
   const main = $('#main');
   if (S.tab === 'jobs') { renderJobs(); return; }
   const list = visible();
@@ -403,22 +447,167 @@ function renderList() {
   const top = main.scrollTop;
   if (!list.length) { main.innerHTML = emptyHtml(); return; }
   let html = bulkHtml();
-  if (S.game) html += list.map(rowHtml).join('');
-  else {
-    // 按游戏分组
-    const groups = new Map();
-    list.forEach(m => { if (!groups.has(m.domain)) groups.set(m.domain, []); groups.get(m.domain).push(m); });
-    const folders = new Set(S.status.games || []);
-    groups.forEach((items, d) => {
-      html += '<div class="group"><h3>' + esc(items[0].game) + '</h3><span class="muted">' + items.length + ' 个</span>' +
-        (folders.has(d) ? '<a class="muted" data-folder="' + esc(d) + '">打开 mod 文件夹</a>' : '<a data-choose="' + esc(d) + '">设置 mod 文件夹</a>') +
-        '<span class="grow"></span>' +
-        (S.tab === 'updates' && items.length > 1 ? '<button class="small" data-update-game="' + esc(d) + '">全部更新</button>' : '') + '</div>';
-      html += items.map(rowHtml).join('');
-    });
-  }
+  const d = S.game;
+  const folders = new Set(S.status.games || []);
+  html += '<div class="group"><h3>' + esc(gameName(d)) + '</h3><span class="muted">' + list.length + ' 个</span>' +
+    (folders.has(d) ? '<a class="muted" data-folder="' + esc(d) + '">打开 mod 文件夹</a>' : '<a data-choose="' + esc(d) + '">设置 mod 文件夹</a>') +
+    '<span class="grow"></span>' +
+    (S.tab === 'updates' && list.length > 1 ? '<button class="small" data-update-game="' + esc(d) + '">全部更新</button>' : '') + '</div>';
+  html += list.map(rowHtml).join('');
   main.innerHTML = html;
   main.scrollTop = top;
+}
+
+// ---- 游戏 ----
+function gameName(d) { const g = S.games.get(d); return g ? g.name : ((S.mods.find(m => m.domain === d) || {}).game || d); }
+function gameCover(d) { const g = S.games.get(d); return g ? g.cover : ''; }
+function gameStats() {
+  const st = new Map();
+  S.games.forEach((g, d) => st.set(d, { mods: 0, updates: 0, last: 0 }));
+  S.mods.forEach(m => {
+    let x = st.get(m.domain);
+    if (!x) { x = { mods: 0, updates: 0, last: 0 }; st.set(m.domain, x); }
+    x.mods++;
+    if (inTab(m, 'updates')) x.updates++;
+    x.last = Math.max(x.last, m.lastDownload || 0);
+  });
+  return st;
+}
+function quickList() {
+  return Array.from(S.games.values()).filter(g => g.pinned >= 0).sort((a, b) => a.pinned - b.pinned).map(g => g.domain);
+}
+function coverStyle(d) { const c = gameCover(d); return c ? ' style="background-image:url(&quot;' + esc(c) + '&quot;)"' : ''; }
+function initials(name) { return esc((name || '?').replace(/^the\s+/i, '').slice(0, 2)); }
+
+function gcardHtml(d, x) {
+  const g = S.games.get(d) || { name: d, en: d, pinned: -1 };
+  const pinned = g.pinned >= 0;
+  const sub = (g.en && g.en !== g.name ? g.en + ' · ' : '') + x.mods + ' 个 mod';
+  return '<div class="gcard' + (d === S.game ? ' cur' : '') + '" data-game="' + esc(d) + '" title="' + esc(g.name + (g.en && g.en !== g.name ? '\n' + g.en : '')) + '">' +
+    '<div class="gcover"' + coverStyle(d) + '>' + (gameCover(d) ? '' : '<span class="ph">' + initials(g.name) + '</span>') +
+    (x.updates ? '<span class="chip new">' + x.updates + ' 个更新</span>' : '') +
+    '<button class="gpin' + (pinned ? ' on' : '') + '" data-pin="' + esc(d) + '" title="' + (pinned ? '从快速切换移除' : '加入快速切换') + '">' + (pinned ? '★' : '☆') + '</button></div>' +
+    '<div class="gname">' + esc(g.name) + '</div><div class="gsub">' + esc(sub) + '</div></div>';
+}
+
+function renderGames() {
+  const st = gameStats();
+  const q = S.gq.trim().toLowerCase();
+  let ds = Array.from(st.keys()).filter(d => st.get(d).mods > 0 || (S.games.get(d) || {}).pinned >= 0);
+  if (q) ds = ds.filter(d => { const g = S.games.get(d) || {}; return (d + ' ' + (g.name || '') + ' ' + (g.en || '')).toLowerCase().includes(q); });
+  const by = {
+    recent: (a, b) => st.get(b).last - st.get(a).last,
+    updates: (a, b) => st.get(b).updates - st.get(a).updates || st.get(b).mods - st.get(a).mods,
+    mods: (a, b) => st.get(b).mods - st.get(a).mods,
+    name: (a, b) => gameName(a).localeCompare(gameName(b), 'zh-CN')
+  }[S.gsort];
+  ds.sort(by);
+  const main = $('#gmain');
+  const top = main.scrollTop;
+  if (!S.mods.length && !ds.length) { main.innerHTML = emptyHtml(); return; }
+  const quick = quickList();
+  let html = '';
+  if (quick.length && !q) {
+    html += '<div class="gsec">快速切换<span class="muted">点封面右上角的 ☆ 加入或移出</span></div><div class="ggrid">' + quick.map(d => gcardHtml(d, st.get(d) || { mods: 0, updates: 0, last: 0 })).join('') + '</div>';
+  }
+  html += '<div class="gsec">' + (q ? '搜索结果' : '全部游戏') + '<span class="muted">' + ds.length + ' 个 · 点进一个游戏才会检查它的更新；封面上的数字是下载记录里看到的</span></div>';
+  html += ds.length ? '<div class="ggrid">' + ds.map(d => gcardHtml(d, st.get(d))).join('') + '</div>' : '<div class="empty">没有找到游戏</div>';
+  main.innerHTML = html;
+  main.scrollTop = top;
+}
+
+function renderGbar() {
+  const bar = $('#gbar');
+  if (S.view !== 'mods') { bar.innerHTML = ''; return; }
+  const st = gameStats();
+  const quick = quickList();
+  const chip = (d, temp) => {
+    const x = st.get(d) || { updates: 0 };
+    return '<button class="gchip' + (d === S.game ? ' on' : '') + (temp ? ' temp' : '') + '" data-game="' + esc(d) + '" title="' + esc(gameName(d)) + '">' +
+      '<span class="gi"' + coverStyle(d) + '></span><span class="gt">' + esc(gameName(d)) + '</span>' + (x.updates ? '<span class="count">' + x.updates + '</span>' : '') + '</button>';
+  };
+  let html = '<button class="ghost back" data-view="games" title="回到游戏列表">‹ 全部游戏</button>';
+  html += quick.map(d => chip(d, false)).join('');
+  if (S.game && !quick.includes(S.game)) {
+    html += chip(S.game, true) + '<button class="small add" data-pin="' + esc(S.game) + '" title="把《' + esc(gameName(S.game)) + '》放进快速切换栏">＋ 加入快速切换</button>';
+  } else {
+    html += '<button class="small add" data-view="games" title="去游戏列表点 ☆ 添加">＋ 添加游戏</button>';
+  }
+  bar.innerHTML = html;
+}
+
+function setView(view) {
+  S.view = view;
+  const games = view === 'games';
+  $('#gtop').hidden = !games;
+  $('#gmain').hidden = !games;
+  $('#gbar').hidden = games;
+  $('#top').hidden = games;
+  $('#body').hidden = games;
+  if (games) closeDetail();
+  renderNotice();
+  renderList();
+}
+function enterGame(d) {
+  const changed = d !== S.game;
+  S.game = d;
+  if (changed) { S.sel.clear(); closeDetail(); $('#main').scrollTop = 0; if (S.tab === 'jobs') S.tab = 'updates'; }
+  $$('.tab[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === S.tab));
+  call('setGame', { domain: d }).catch(() => {});
+  setView('mods');
+  // 进一个游戏时检查它的更新（10 分钟内查过就不再查）
+  const last = (S.checked || {})[d] || 0;
+  if (Date.now() - last > 600000) syncGame();
+}
+function syncGame() {
+  if (S.view === 'mods' && S.game) {
+    S.checked = S.checked || {};
+    S.checked[S.game] = Date.now();
+    call('sync', { domain: S.game });
+  } else call('sync', { domain: '' });
+}
+async function loadGames() {
+  const arr = await call('games');
+  S.games = new Map(arr.map(g => [g.domain, g]));
+}
+async function pinGame(d, on) {
+  const arr = await call('pinGame', { domain: d, on });
+  S.games = new Map(arr.map(g => [g.domain, g]));
+  renderList();
+}
+function gameMenu(d, x, y) {
+  const g = S.games.get(d) || { pinned: -1 };
+  const hasFolder = (S.status.games || []).includes(d);
+  menu(x, y, [
+    ['进入', () => enterGame(d)],
+    [g.pinned >= 0 ? '从快速切换移除' : '加入快速切换', () => pinGame(d, !(g.pinned >= 0))],
+    ['改名…', () => renameGame(d)],
+    '-',
+    [hasFolder ? '打开 mod 文件夹' : '设置 mod 文件夹', () => hasFolder ? call('openFolder', { domain: d }).catch(e => toast(e.message, 'error')) : call('chooseFolder', { domain: d }).then(() => reload())],
+    ['在 N 网打开', () => call('openSite', { url: 'https://www.nexusmods.com/games/' + d })]
+  ]);
+}
+function renameGame(d) {
+  const g = S.games.get(d) || { name: d, en: d, alias: '' };
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg';
+  bg.innerHTML = '<div class="modal"><h3>改名</h3><div class="muted">' + esc(g.en || d) + '（留空 = 用自动的中文名）</div>' +
+    '<input id="renameInput" value="' + esc(g.alias || '') + '" placeholder="' + esc(g.name) + '"><div class="btns"><button id="renameCancel">取消</button><button class="primary" id="renameOk">保存</button></div></div>';
+  document.body.appendChild(bg);
+  const input = $('#renameInput');
+  input.focus();
+  input.select();
+  const close = () => bg.remove();
+  const ok = async () => {
+    close();
+    const arr = await call('renameGame', { domain: d, alias: input.value });
+    S.games = new Map(arr.map(x => [x.domain, x]));
+    await reload();
+  };
+  $('#renameOk').onclick = ok;
+  $('#renameCancel').onclick = close;
+  bg.addEventListener('mousedown', e => { if (e.target === bg) close(); });
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') ok(); if (e.key === 'Escape') close(); });
 }
 
 function bulkHtml() {
@@ -676,12 +865,18 @@ function toast(text, kind) {
 // ---- 事件 ----
 document.addEventListener('click', e => {
   const t = e.target;
+  const pin = t.closest('[data-pin]');
+  if (pin) { e.stopPropagation(); const d = pin.dataset.pin; const g = S.games.get(d) || { pinned: -1 }; pinGame(d, !(g.pinned >= 0)); return; }
+  const vw = t.closest('[data-view]');
+  if (vw) { setView(vw.dataset.view); return; }
+  const gm = t.closest('[data-game]');
+  if (gm) { enterGame(gm.dataset.game); return; }
   const go = t.closest('[data-go]');
   if (go) {
     const g = go.dataset.go;
     if (g === 'settings') call('settings');
     else if (g === 'login') call('login');
-    else if (g === 'sync') call('sync');
+    else if (g === 'sync') syncGame();
     else if (g === 'hideTr') { S.trHint = true; try { localStorage.setItem('nmu.trHint', '1'); } catch (err) {} renderNotice(); }
     return;
   }
@@ -760,6 +955,8 @@ document.addEventListener('click', e => {
   }
 });
 document.addEventListener('contextmenu', e => {
+  const gc = e.target.closest('[data-game]');
+  if (gc) { e.preventDefault(); gameMenu(gc.dataset.game, e.clientX, e.clientY); return; }
   const row = e.target.closest('.row');
   if (!row) return;
   e.preventDefault();
@@ -768,14 +965,18 @@ document.addEventListener('contextmenu', e => {
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { if ($('.menu')) closeMenu(); else if (S.detailKey) closeDetail(); }
-  if (e.key === 'F5') { e.preventDefault(); call('sync'); }
+  if (e.key === 'F5') { e.preventDefault(); syncGame(); }
 });
-$('#game').addEventListener('change', e => { S.game = e.target.value; saveView(); renderList(); });
+$('#gsort').addEventListener('change', e => { S.gsort = e.target.value; saveView(); renderList(); });
+$('#gsort').value = S.gsort;
+let gqTimer = 0;
+$('#gsearch').addEventListener('input', e => { clearTimeout(gqTimer); gqTimer = setTimeout(() => { S.gq = e.target.value; renderList(); }, 120); });
+$('#histBtn').addEventListener('click', () => call('sync', { domain: '' }));
 $('#sort').addEventListener('change', e => { S.sort = e.target.value; saveView(); renderList(); });
 $('#sort').value = S.sort;
 let qTimer = 0;
 $('#search').addEventListener('input', e => { clearTimeout(qTimer); qTimer = setTimeout(() => { S.q = e.target.value; renderList(); }, 150); });
-$('#syncBtn').addEventListener('click', () => call('sync'));
+$('#syncBtn').addEventListener('click', syncGame);
 $('#trToggle').addEventListener('change', async e => {
   if (e.target.checked && !S.status.translateReady) {
     e.target.checked = false;
@@ -814,11 +1015,13 @@ function renderNotice() {
   const btn = $('#syncBtn');
   btn.classList.toggle('spin', !!st.syncing);
   btn.disabled = !!st.syncing;
-  btn.title = '上次检查：' + (st.lastSync ? date(st.lastSync) : '从未') + '（F5）';
+  btn.title = '检查《' + gameName(S.game) + '》的更新（F5）\n上次检查：' + (st.lastSync ? date(st.lastSync) : '从未');
+  $('#histBtn').disabled = !!st.syncing;
 }
 
 async function reload() {
-  const [list, st] = await Promise.all([call('list'), call('status')]);
+  const [list, st, games] = await Promise.all([call('list'), call('status'), call('games')]);
+  S.games = new Map(games.map(g => [g.domain, g]));
   S.mods = list;
   S.byKey = new Map(list.map(m => [m.key, m]));
   S.status = st;
@@ -851,6 +1054,7 @@ function onEvent(d) {
       break;
     }
     case 'toast': toast(d.text, d.kind); break;
+    case 'games': loadGames().then(() => renderList()).catch(e => log(e.message)); break;
     case 'theme': applyTheme(d.theme, d.accent); break;
     case 'status':
       S.status = Object.assign(S.status, d.status);
@@ -870,6 +1074,12 @@ chrome.webview.postMessage({ method: 'ready' });
 (async () => {
   try {
     await reload();
+    const lastGame = S.status.lastGame;
+    if (lastGame && (S.mods.some(m => m.domain === lastGame) || S.games.has(lastGame))) {
+      S.game = lastGame;
+      S.checked = { [lastGame]: Date.now() }; // 程序启动时已经查过这个游戏
+      setView('mods');
+    } else setView('games');
     setTranslateScript();
     const jobs = await call('jobs');
     jobs.forEach(j => S.jobs.set(j.id, j));

@@ -49,17 +49,16 @@ public static class Engine
 		}
 	}
 
-	public static string GameName(string domain)
+	public static string GameName(string domain) => GameCatalog.Display(domain);
+
+	/// <summary>N 网上的英文名（设置里记的名字用这个）。</summary>
+	private static string EnglishName(string domain)
 	{
 		lock (Store.Lock)
 		{
 			if (Store.Ca.Games.TryGetValue(domain ?? "", out GameInfo g) && !string.IsNullOrEmpty(g.Name))
 			{
 				return g.Name;
-			}
-			if (Store.Cfg.Games.TryGetValue(domain ?? "", out GameSetting s) && !string.IsNullOrEmpty(s.Name))
-			{
-				return s.Name;
 			}
 			string fromHistory = Store.St.Mods.Values.FirstOrDefault(m => m.Domain == domain && !string.IsNullOrEmpty(m.Game))?.Game;
 			return string.IsNullOrEmpty(fromHistory) ? domain : fromHistory;
@@ -213,14 +212,7 @@ public static class Engine
 		return arr;
 	}
 
-	private static string GameNameLocked(ModEntry e)
-	{
-		if (Store.Ca.Games.TryGetValue(e.Domain, out GameInfo g) && !string.IsNullOrEmpty(g.Name))
-		{
-			return g.Name;
-		}
-		return string.IsNullOrEmpty(e.Game) ? e.Domain : e.Game;
-	}
+	private static string GameNameLocked(ModEntry e) => GameCatalog.DisplayLocked(e.Domain);
 
 	public static JObject StatusJson()
 	{
@@ -242,6 +234,7 @@ public static class Engine
 				["wantTranslate"] = Store.Cfg.AutoTranslate,
 				["translateReady"] = Translator.Ready,
 				["lang"] = Store.Cfg.TargetLang,
+				["lastGame"] = Store.Cfg.LastGame ?? "",
 				["games"] = new JArray(Store.Cfg.Games.Values.Where(g => !string.IsNullOrEmpty(g.Folder)).Select(g => g.Domain))
 			};
 		}
@@ -249,8 +242,13 @@ public static class Engine
 
 	// ---- 同步 ----
 
-	public static async Task SyncAsync()
+	/// <summary>
+	/// 同步：读下载记录、追踪列表（不花多少次数），然后只检查 domain 这一个游戏的更新。
+	/// domain 为空时只读下载记录，不查任何游戏的更新。
+	/// </summary>
+	public static async Task SyncAsync(string domain = null)
 	{
+		domain = string.IsNullOrWhiteSpace(domain) ? null : domain.Trim().ToLowerInvariant();
 		if (Syncing)
 		{
 			return;
@@ -360,16 +358,16 @@ public static class Engine
 						long now = Store.Now;
 						foreach (JObject t in tracked.OfType<JObject>())
 						{
-							string domain = (t.Value<string>("domain_name") ?? "").ToLowerInvariant();
+							string td = (t.Value<string>("domain_name") ?? "").ToLowerInvariant();
 							int id = t.Value<int?>("mod_id") ?? 0;
-							if (domain == "" || id == 0)
+							if (td == "" || id == 0)
 							{
 								continue;
 							}
-							string key = Store.Key(domain, id);
+							string key = Store.Key(td, id);
 							if (!Store.St.Mods.TryGetValue(key, out ModEntry e))
 							{
-								e = new ModEntry { Domain = domain, ModId = id, FirstSeen = now };
+								e = new ModEntry { Domain = td, ModId = id, FirstSeen = now };
 								Store.St.Mods[key] = e;
 							}
 							e.Tracked = true;
@@ -383,13 +381,13 @@ public static class Engine
 			}
 
 			// 3. 本地文件夹
-			if (cfg.ScanFolders)
+			if (cfg.ScanFolders && domain != null)
 			{
 				Progress("正在扫描 mod 文件夹…");
 				List<GameSetting> games;
 				lock (Store.Lock)
 				{
-					games = Store.Cfg.Games.Values.Where(g => !string.IsNullOrEmpty(g.Folder)).ToList();
+					games = Store.Cfg.Games.Values.Where(g => !string.IsNullOrEmpty(g.Folder) && string.Equals(g.Domain, domain, StringComparison.OrdinalIgnoreCase)).ToList();
 				}
 				foreach (GameSetting g in games)
 				{
@@ -416,17 +414,17 @@ public static class Engine
 
 			if (hasKey)
 			{
-				await RefreshFromApiAsync(notes).ConfigureAwait(false);
+				await RefreshFromApiAsync(notes, domain).ConfigureAwait(false);
 			}
 			lock (Store.Lock)
 			{
-				// 下载记录里出现过的游戏都加到设置里，方便设置文件夹
-				foreach (string domain in Store.St.Mods.Values.Select(m => m.Domain).Distinct().ToList())
+				// 检查过的游戏加到设置里，方便设置文件夹
+				if (domain != null)
 				{
 					GameSetting g = Store.Cfg.Game(domain);
 					if (string.IsNullOrEmpty(g.Name))
 					{
-						g.Name = GameName(domain);
+						g.Name = EnglishName(domain);
 					}
 				}
 				Store.St.LastSync = Store.Now;
@@ -456,7 +454,7 @@ public static class Engine
 		public void Report(string value) => Progress(value);
 	}
 
-	private static async Task RefreshFromApiAsync(List<string> notes)
+	private static async Task RefreshFromApiAsync(List<string> notes, string only)
 	{
 		// 游戏列表（名字、ID），一周取一次
 		bool needGames;
@@ -494,13 +492,13 @@ public static class Engine
 		List<string> domains;
 		lock (Store.Lock)
 		{
-			domains = Store.St.Mods.Values.Where(m => !IsPerm(m.Key)).Select(m => m.Domain).Distinct().ToList();
+			domains = only == null ? new List<string>() : Store.St.Mods.Values.Where(m => m.Domain == only && !IsPerm(m.Key)).Select(m => m.Domain).Distinct().ToList();
 		}
 		int di = 0;
 		foreach (string domain in domains)
 		{
 			di++;
-			Progress("正在检查《" + GameName(domain) + "》最近的更新…（" + di + "/" + domains.Count + "）");
+			Progress("正在检查《" + GameName(domain) + "》最近的更新…");
 			long since;
 			lock (Store.Lock)
 			{
@@ -544,7 +542,7 @@ public static class Engine
 		List<ModEntry> needInfo;
 		lock (Store.Lock)
 		{
-			needInfo = Store.St.Mods.Values.Where(e =>
+			needInfo = Store.St.Mods.Values.Where(e => e.Domain == only).Where(e =>
 			{
 				if (!Store.Ca.Mods.TryGetValue(e.Key, out ModInfo i))
 				{
@@ -586,7 +584,7 @@ public static class Engine
 		List<ModEntry> needFiles;
 		lock (Store.Lock)
 		{
-			needFiles = Store.St.Mods.Values.Where(e =>
+			needFiles = Store.St.Mods.Values.Where(e => e.Domain == only).Where(e =>
 			{
 				if (IsPerm(e.Key))
 				{

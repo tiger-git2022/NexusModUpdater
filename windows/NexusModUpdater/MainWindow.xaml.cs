@@ -80,7 +80,8 @@ public partial class MainWindow : FluentWindow
 			}
 			if (sync)
 			{
-				_ = Engine.SyncAsync();
+				// 只检查上次看的那个游戏；没选过游戏时只读下载记录
+				_ = Engine.SyncAsync(Store.Cfg.LastGame);
 			}
 			if (check)
 			{
@@ -507,7 +508,7 @@ public partial class MainWindow : FluentWindow
 			UpdateKeyState();
 			UpdateSide();
 			Engine.Changed();
-			_ = Engine.SyncAsync();
+			_ = Engine.SyncAsync(Store.Cfg.LastGame);
 		}
 		catch (Exception ex)
 		{
@@ -534,11 +535,15 @@ public partial class MainWindow : FluentWindow
 		lock (Store.Lock)
 		{
 			var counts = Store.St.Mods.Values.GroupBy(m => m.Domain).ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
-			games = Store.Cfg.Games.Values.OrderByDescending(g => counts.TryGetValue(g.Domain, out int n) ? n : 0).ThenBy(g => g.Name).ToArray();
+			// 只列设置了文件夹的、快速切换里的、正在看的游戏（下载记录里的游戏可能上百个）
+			var quick = new System.Collections.Generic.HashSet<string>(Store.Cfg.QuickGames, StringComparer.OrdinalIgnoreCase);
+			games = Store.Cfg.Games.Values
+				.Where(g => !string.IsNullOrEmpty(g.Folder) || quick.Contains(g.Domain) || string.Equals(g.Domain, Store.Cfg.LastGame, StringComparison.OrdinalIgnoreCase))
+				.OrderByDescending(g => counts.TryGetValue(g.Domain, out int n) ? n : 0).ThenBy(g => g.Name).ToArray();
 		}
 		if (games.Length == 0)
 		{
-			GamesPanel.Children.Add(new TextBlock { Text = "还没有游戏。先到「Mod 更新」页同步一次，或者在上面输入游戏名添加。", Style = (Style)FindResource("Muted"), Margin = new Thickness(2, 0, 0, 0) });
+			GamesPanel.Children.Add(new TextBlock { Text = "还没有游戏。在「Mod 更新」页选一个游戏，或者在上面输入游戏名添加。", Style = (Style)FindResource("Muted"), Margin = new Thickness(2, 0, 0, 0) });
 			return;
 		}
 		foreach (GameSetting g in games)
@@ -555,7 +560,7 @@ public partial class MainWindow : FluentWindow
 		grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 		grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 		var title = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
-		title.Children.Add(new TextBlock { Text = string.IsNullOrEmpty(g.Name) ? g.Domain : g.Name, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+		title.Children.Add(new TextBlock { Text = GameCatalog.Display(g.Domain), FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
 		title.Children.Add(new TextBlock { Text = g.Domain, Style = (Style)FindResource("Muted"), FontSize = 12 });
 		grid.Children.Add(title);
 
@@ -646,7 +651,9 @@ public partial class MainWindow : FluentWindow
 				g.Name = Engine.GameName(d);
 			}
 		}
-		Store.SaveConfig();
+		// 手动加的游戏放进快速切换
+		GameCatalog.SetPinned(d, true);
+		Engine.Changed();
 		NewGame.Text = "";
 		BuildGames();
 	}

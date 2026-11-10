@@ -65,6 +65,10 @@ public sealed class AppView : Grid
 			_stateTimer.Stop();
 			_stateTimer.Start();
 		});
+		GameCatalog.Changed += () => Dispatcher.BeginInvoke((Action)delegate
+		{
+			Post(new JObject { ["event"] = "games" });
+		});
 		Engine.SyncProgress += (text, pct) => Dispatcher.BeginInvoke((Action)delegate
 		{
 			Post(new JObject { ["event"] = "sync", ["text"] = text, ["pct"] = pct, ["syncing"] = Engine.Syncing });
@@ -317,8 +321,19 @@ public sealed class AppView : Grid
 		case "list":
 			return Engine.ListJson();
 		case "sync":
-			_ = Engine.SyncAsync();
+			_ = Engine.SyncAsync(a.Value<string>("domain"));
 			return true;
+		case "games":
+			return GameCatalog.Json();
+		case "setGame":
+			GameCatalog.SetLast(a.Value<string>("domain"));
+			return true;
+		case "pinGame":
+			GameCatalog.SetPinned(a.Value<string>("domain"), a.Value<bool>("on"));
+			return GameCatalog.Json();
+		case "renameGame":
+			GameCatalog.SetAlias(a.Value<string>("domain"), a.Value<string>("alias"));
+			return GameCatalog.Json();
 		case "detail":
 			return await Task.Run(() => Engine.DetailAsync(a.Value<string>("domain"), a.Value<int>("modId"), a.Value<bool?>("force") ?? false));
 		case "translate":

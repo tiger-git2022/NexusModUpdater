@@ -210,6 +210,19 @@ public sealed class Cache
 
 	/// <summary>每个游戏上次取 updated.json 的时间。</summary>
 	public Dictionary<string, long> UpdatedFetched = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+
+	/// <summary>游戏的中文名（从 Steam 查到的）。</summary>
+	public Dictionary<string, GameMeta> GameMeta = new Dictionary<string, GameMeta>(StringComparer.OrdinalIgnoreCase);
+}
+
+public sealed class GameMeta
+{
+	/// <summary>Steam 上的简体中文名；没有中文名时为空。</summary>
+	public string Zh = "";
+
+	public int SteamId;
+
+	public long FetchedAt;
 }
 
 /// <summary>设置、状态、缓存的读写。所有读写都要在 lock (Store.Lock) 里。</summary>

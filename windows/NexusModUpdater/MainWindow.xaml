@@ -161,7 +161,7 @@
                                 <ui:TextBox x:Name="NewGame" DockPanel.Dock="Right" Width="220" Margin="0,0,8,0" PlaceholderText="游戏网址里的名字，如 skyrimspecialedition"/>
                                 <TextBlock Text="游戏与 mod 文件夹" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                             </DockPanel>
-                            <TextBlock Text="同步后，下载记录里出现过的游戏会自动列在这里。没设置文件夹的游戏，第一次下载时会问。" Style="{StaticResource Muted}" Margin="2,0,0,8"/>
+                            <TextBlock Text="这里列出设置了文件夹的、快速切换里的和正在看的游戏。没设置文件夹的游戏，第一次下载时会问。" Style="{StaticResource Muted}" Margin="2,0,0,8"/>
                             <StackPanel x:Name="GamesPanel"/>
 
                             <TextBlock Text="翻译" Style="{StaticResource Section}"/>
