@@ -689,8 +689,8 @@ public static class Engine
 			{
 				if (!Store.Ca.Mods.TryGetValue(e.Key, out ModInfo i))
 				{
-					// 下载记录里已经有名字和更新时间：没有更新迹象的先不查（下载记录可能上千条），打开详情时再查
-					return !e.InHistory || string.IsNullOrEmpty(e.Name) || e.HistoryUpdate == 0 || (!IsPerm(e.Key) && Signal(e) > Baseline(e) + Slack);
+					// 还没查过的都查（列表要显示图片和简介）；只检查选中的游戏，每个 mod 查一次就缓存下来
+					return true;
 				}
 				if (IsPerm(e.Key))
 				{
@@ -703,6 +703,15 @@ public static class Engine
 				}
 				return sig > i.FetchedAt || (Store.Now - i.FetchedAt > 30 * 86400);
 			}).ToList();
+		}
+		// 第一次进一个 mod 很多的游戏时，没查过的可能有几百个：最近下载的先查，每次最多 300 个，接口次数不多了就留到下次
+		lock (Store.Lock)
+		{
+			needInfo = needInfo
+				.OrderByDescending(e => Store.Ca.Mods.ContainsKey(e.Key) ? 1 : 0)
+				.ThenByDescending(e => e.LastDownload)
+				.Take(NexusApi.HourlyRemaining >= 0 && NexusApi.HourlyRemaining < 400 ? Math.Max(0, NexusApi.HourlyRemaining - 100) : 300)
+				.ToList();
 		}
 		await ForEachAsync(needInfo, "正在获取 mod 信息", notes, async e =>
 		{
