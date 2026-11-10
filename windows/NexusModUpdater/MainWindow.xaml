@@ -1,0 +1,274 @@
+<ui:FluentWindow x:Class="NexusModUpdater.MainWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 Title="N网 Mod 更新"
+                 Width="1280" Height="800" MinWidth="960" MinHeight="600"
+                 WindowStartupLocation="CenterScreen"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Acrylic"
+                 WindowCornerPreference="Round"
+                 UseLayoutRounding="True"
+                 TextOptions.TextFormattingMode="Display"
+                 TextOptions.TextRenderingMode="ClearType"
+                 RenderOptions.ClearTypeHint="Enabled"
+                 Icon="pack://application:,,,/NexusModUpdater;component/NexusModUpdater/icon.png">
+    <ui:FluentWindow.Resources>
+        <Style x:Key="NavButton" TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Appearance" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="12,9"/>
+            <Setter Property="Margin" Value="0,2"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+        <Style x:Key="Section" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="2,18,0,8"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+        </Style>
+        <Style x:Key="Muted" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style TargetType="ui:CardControl" BasedOn="{StaticResource {x:Type ui:CardControl}}">
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+    </ui:FluentWindow.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 整个窗口一层灰色遮罩（亚克力），导航和页面看起来一致 -->
+        <Rectangle x:Name="Tint" Grid.RowSpan="2" IsHitTestVisible="False" Opacity="0"/>
+
+        <ui:TitleBar Grid.Row="0" Title="N网 Mod 更新">
+            <ui:TitleBar.Icon>
+                <ui:ImageIcon Source="pack://application:,,,/NexusModUpdater;component/NexusModUpdater/icon.png"/>
+            </ui:TitleBar.Icon>
+        </ui:TitleBar>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="200"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 导航 -->
+            <DockPanel Grid.Column="0" Margin="10,4,6,12">
+                <StackPanel DockPanel.Dock="Bottom" Margin="6,8,4,0">
+                    <Border x:Name="AppUpdateBox" Visibility="Collapsed" CornerRadius="6" Padding="10,8" Margin="0,0,0,10"
+                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock x:Name="AppUpdateText" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <ui:Button x:Name="AppUpdateButton" Content="更新" Appearance="Primary" Margin="0,8,0,0" HorizontalAlignment="Stretch" Click="AppUpdate_Click"/>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock x:Name="SideUser" Style="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="SideLimit" Style="{StaticResource Muted}" FontSize="12" Margin="0,2,0,0"/>
+                </StackPanel>
+                <StackPanel x:Name="Nav">
+                    <ui:Button Style="{StaticResource NavButton}" Tag="0" Click="Nav_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="ArrowSync24" Margin="0,0,12,0"/><TextBlock Text="Mod 更新"/>
+                            <Border x:Name="NavBadge" Visibility="Collapsed" Margin="8,0,0,0" Padding="6,0" CornerRadius="9" MinWidth="18" Height="18" Background="#D98F40" VerticalAlignment="Center">
+                                <TextBlock x:Name="NavCount" FontSize="11" FontWeight="SemiBold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </StackPanel>
+                    </ui:Button>
+                    <ui:Button Style="{StaticResource NavButton}" Tag="1" Click="Nav_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Globe24" Margin="0,0,12,0"/><TextBlock Text="N网"/>
+                            <Border x:Name="NavSiteDot" Visibility="Collapsed" Margin="8,0,0,0" Width="8" Height="8" CornerRadius="4" Background="#D98F40" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </ui:Button>
+                    <ui:Button Style="{StaticResource NavButton}" Tag="2" Click="Nav_Click">
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Settings24" Margin="0,0,12,0"/><TextBlock Text="设置"/></StackPanel>
+                    </ui:Button>
+                </StackPanel>
+            </DockPanel>
+
+            <Border x:Name="PageLayer" Grid.Column="1" CornerRadius="8,0,0,0" Background="{DynamicResource LayerFillColorDefaultBrush}"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1,1,0,0">
+                <Grid>
+                    <!-- 0 Mod 更新（WebView2） -->
+                    <Border x:Name="PageApp"/>
+                    <!-- 1 N网（WebView2） -->
+                    <Border x:Name="PageSite" Visibility="Collapsed"/>
+                    <!-- 2 设置 -->
+                    <ScrollViewer x:Name="PageSettings" Padding="24,6,24,24" Visibility="Collapsed">
+                        <StackPanel MaxWidth="980">
+                            <TextBlock Text="设置" FontSize="26" FontWeight="SemiBold" Margin="0,10,0,0"/>
+
+                            <TextBlock Text="账号" Style="{StaticResource Section}"/>
+                            <ui:CardControl Icon="{ui:SymbolIcon Key24}">
+                                <ui:CardControl.Header>
+                                    <StackPanel>
+                                        <TextBlock Text="N网 API Key"/>
+                                        <TextBlock Text="用来查 mod 信息、文件和更新。在 N 网「设置 → API Keys」页面最下面的 Personal API Key 复制" Style="{StaticResource Muted}"/>
+                                        <TextBlock x:Name="KeyState" Style="{StaticResource Muted}" Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                </ui:CardControl.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:PasswordBox x:Name="ApiKey" Width="260" Margin="0,0,8,0" PlaceholderText="粘贴 API Key"/>
+                                    <ui:Button Content="验证" Appearance="Primary" Margin="0,0,8,0" Click="ValidateKey_Click"/>
+                                    <ui:Button Content="获取…" Click="GetKey_Click"/>
+                                </StackPanel>
+                            </ui:CardControl>
+                            <ui:CardControl Icon="{ui:SymbolIcon Person24}">
+                                <ui:CardControl.Header>
+                                    <StackPanel>
+                                        <TextBlock Text="网页登录"/>
+                                        <TextBlock Text="读取下载记录、看和发评论、非会员下载都需要在「N网」页登录一次（登录状态保存在程序文件夹里）" Style="{StaticResource Muted}"/>
+                                    </StackPanel>
+                                </ui:CardControl.Header>
+                                <ui:Button Content="去登录" Click="Login_Click"/>
+                            </ui:CardControl>
+
+                            <TextBlock Text="已下载的 mod 从哪里来" Style="{StaticResource Section}"/>
+                            <ui:CardControl Icon="{ui:SymbolIcon History24}">
+                                <ui:CardControl.Header>
+                                    <StackPanel>
+                                        <TextBlock Text="网页上的下载记录"/>
+                                        <TextBlock Text="手动下载和 Vortex 下载过的 mod 都在里面，有最后下载时间" Style="{StaticResource Muted}"/>
+                                    </StackPanel>
+                                </ui:CardControl.Header>
+                                <ui:ToggleSwitch x:Name="UseHistory" Click="Option_Changed"/>
+                            </ui:CardControl>
+                            <ui:CardControl Icon="{ui:SymbolIcon Eye24}" Header="N 网上「追踪」的 mod">
+                                <ui:ToggleSwitch x:Name="UseTracked" Click="Option_Changed"/>
+                            </ui:CardControl>
+                            <ui:CardControl Icon="{ui:SymbolIcon FolderSearch24}">
+                                <ui:CardControl.Header>
+                                    <StackPanel>
+                                        <TextBlock Text="扫描 mod 文件夹里的 N 网压缩包"/>
+                                        <TextBlock Text="文件名形如「名字-12345-1-0-1700000000.zip」的会被认出来" Style="{StaticResource Muted}"/>
+                                    </StackPanel>
+                                </ui:CardControl.Header>
+                                <ui:ToggleSwitch x:Name="ScanFolders" Click="Option_Changed"/>
+                            </ui:CardControl>
+                            <ui:CardControl Icon="{ui:SymbolIcon ArrowSync24}" Header="打开程序时自动检查更新">
+                                <ui:ToggleSwitch x:Name="SyncOnStart" Click="Option_Changed"/>
+                            </ui:CardControl>
+
+                            <DockPanel Margin="2,18,0,8">
+                                <ui:Button DockPanel.Dock="Right" Content="添加游戏" Icon="{ui:SymbolIcon Add24}" Click="AddGame_Click"/>
+                                <ui:TextBox x:Name="NewGame" DockPanel.Dock="Right" Width="220" Margin="0,0,8,0" PlaceholderText="游戏网址里的名字，如 skyrimspecialedition"/>
+                                <TextBlock Text="游戏与 mod 文件夹" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            </DockPanel>
+                            <TextBlock Text="同步后，下载记录里出现过的游戏会自动列在这里。没设置文件夹的游戏，第一次下载时会问。" Style="{StaticResource Muted}" Margin="2,0,0,8"/>
+                            <StackPanel x:Name="GamesPanel"/>
+
+                            <TextBlock Text="翻译" Style="{StaticResource Section}"/>
+                            <ui:CardControl Icon="{ui:SymbolIcon Translate24}">
+                                <ui:CardControl.Header>
+                                    <StackPanel>
+                                        <TextBlock Text="翻译服务"/>
+                                        <TextBlock Text="微软：国内可直连，免费；谷歌：需要能访问谷歌；OpenAI 兼容：DeepSeek、本地模型等" Style="{StaticResource Muted}"/>
+                                    </StackPanel>
+                                </ui:CardControl.Header>
+                                <ComboBox x:Name="EngineBox" MinWidth="200" SelectionChanged="Translate_Changed">
+                                    <ComboBoxItem Content="微软翻译（推荐）" Tag="bing"/>
+                                    <ComboBoxItem Content="谷歌翻译" Tag="google"/>
+                                    <ComboBoxItem Content="OpenAI 兼容接口" Tag="openai"/>
+                                    <ComboBoxItem Content="关闭翻译" Tag="off"/>
+                                </ComboBox>
+                            </ui:CardControl>
+                            <StackPanel x:Name="OpenAiPanel" Visibility="Collapsed">
+                                <ui:CardControl Icon="{ui:SymbolIcon Server24}" Header="接口地址">
+                                    <ui:TextBox x:Name="OpenAiBase" Width="360" PlaceholderText="https://api.deepseek.com/v1" LostFocus="OpenAi_LostFocus"/>
+                                </ui:CardControl>
+                                <ui:CardControl Icon="{ui:SymbolIcon Key24}" Header="接口 Key">
+                                    <ui:PasswordBox x:Name="OpenAiKey" Width="360" LostFocus="OpenAi_LostFocus"/>
+                                </ui:CardControl>
+                                <ui:CardControl Icon="{ui:SymbolIcon Bot24}" Header="模型">
+                                    <ui:TextBox x:Name="OpenAiModel" Width="360" PlaceholderText="deepseek-chat" LostFocus="OpenAi_LostFocus"/>
+                                </ui:CardControl>
+                            </StackPanel>
+                            <ui:CardControl Icon="{ui:SymbolIcon LocalLanguage24}" Header="翻译成">
+                                <ComboBox x:Name="Lang" MinWidth="200" SelectionChanged="Translate_Changed"/>
+                            </ui:CardControl>
+                            <ui:CardControl Icon="{ui:SymbolIcon TextDescription24}" Header="自动翻译 mod 名字、简介、文件说明和更新日志">
+                                <ui:ToggleSwitch x:Name="AutoTranslate" Click="Translate_Changed"/>
+                            </ui:CardControl>
+                            <ui:CardControl Icon="{ui:SymbolIcon Comment24}" Header="自动翻译 N 网网页（评论区、简介等）">
+                                <ui:ToggleSwitch x:Name="TranslateSite" Click="Translate_Changed"/>
+                            </ui:CardControl>
+                            <ui:CardControl Icon="{ui:SymbolIcon Beaker24}">
+                                <ui:CardControl.Header>
+                                    <StackPanel>
+                                        <TextBlock Text="试一下"/>
+                                        <TextBlock x:Name="TestResult" Style="{StaticResource Muted}"/>
+                                    </StackPanel>
+                                </ui:CardControl.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:Button Content="测试翻译" Margin="0,0,8,0" Click="TestTranslate_Click"/>
+                                    <ui:Button Content="清空翻译缓存" Click="ClearTranslate_Click"/>
+                                </StackPanel>
+                            </ui:CardControl>
+
+                            <TextBlock Text="外观" Style="{StaticResource Section}"/>
+                            <ui:CardControl Icon="{ui:SymbolIcon DarkTheme24}" Header="主题">
+                                <ComboBox x:Name="ThemeBox" MinWidth="180" SelectionChanged="Appearance_Changed">
+                                    <ComboBoxItem Content="跟随系统"/>
+                                    <ComboBoxItem Content="日间（浅色）"/>
+                                    <ComboBoxItem Content="夜间（深色）"/>
+                                </ComboBox>
+                            </ui:CardControl>
+                            <ui:CardControl Icon="{ui:SymbolIcon Blur24}">
+                                <ui:CardControl.Header>
+                                    <StackPanel>
+                                        <TextBlock Text="窗口背景"/>
+                                        <TextBlock Text="亚克力：半透明，透出后面模糊的窗口；云母：取桌面壁纸的颜色" Style="{StaticResource Muted}"/>
+                                    </StackPanel>
+                                </ui:CardControl.Header>
+                                <ComboBox x:Name="BackdropBox" MinWidth="180" SelectionChanged="Appearance_Changed">
+                                    <ComboBoxItem Content="亚克力（半透明）"/>
+                                    <ComboBoxItem Content="云母"/>
+                                    <ComboBoxItem Content="无"/>
+                                </ComboBox>
+                            </ui:CardControl>
+                            <ui:CardControl x:Name="TintCard" Icon="{ui:SymbolIcon Color24}">
+                                <ui:CardControl.Header>
+                                    <StackPanel>
+                                        <TextBlock Text="亚克力遮罩不透明度"/>
+                                        <TextBlock Text="深色主题用深灰、浅色主题用浅灰盖在半透明背景上；越大越不透明" Style="{StaticResource Muted}"/>
+                                    </StackPanel>
+                                </ui:CardControl.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <Slider x:Name="TintSlider" Width="200" Minimum="0" Maximum="100" SmallChange="1" LargeChange="10"
+                                            IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center" ValueChanged="Tint_Changed"/>
+                                    <TextBlock x:Name="TintText" Width="44" TextAlignment="Right" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                </StackPanel>
+                            </ui:CardControl>
+
+                            <TextBlock Text="关于" Style="{StaticResource Section}"/>
+                            <ui:CardControl Icon="{ui:SymbolIcon ArrowDownload24}">
+                                <ui:CardControl.Header>
+                                    <StackPanel>
+                                        <TextBlock x:Name="VersionText"/>
+                                        <TextBlock x:Name="UpdateState" Style="{StaticResource Muted}"/>
+                                    </StackPanel>
+                                </ui:CardControl.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:ToggleSwitch x:Name="CheckAppUpdate" Content="自动检查" Margin="0,0,16,0" Click="Option_Changed"/>
+                                    <ui:Button Content="检查更新" Click="CheckUpdate_Click"/>
+                                </StackPanel>
+                            </ui:CardControl>
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                <ui:Button Content="查看日志" Icon="{ui:SymbolIcon DocumentText24}" Margin="0,0,8,0" Click="OpenLog_Click"/>
+                                <ui:Button Content="打开程序文件夹" Icon="{ui:SymbolIcon Folder24}" Margin="0,0,8,0" Click="OpenFolder_Click"/>
+                                <ui:Button Content="项目主页" Icon="{ui:SymbolIcon Open24}" Click="OpenRepo_Click"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</ui:FluentWindow>

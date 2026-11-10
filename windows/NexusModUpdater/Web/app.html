@@ -1,0 +1,866 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Mod 更新</title>
+<style>
+/* 颜色跟 WPF-UI（Fluent）一致；页面本身透明，透出窗口的亚克力背景 */
+:root {
+  --accent: #60cdff;
+  --card: rgba(255,255,255,.051); --card2: rgba(255,255,255,.03); --hover: rgba(255,255,255,.084); --press: rgba(255,255,255,.033);
+  --line: rgba(255,255,255,.083); --ctl: rgba(255,255,255,.061); --ctlhover: rgba(255,255,255,.084); --ctlline: rgba(255,255,255,.093);
+  --fg: #ffffff; --fg2: rgba(255,255,255,.786); --fg3: rgba(255,255,255,.545); --chip: rgba(255,255,255,.07);
+  --solid: #2c2c2c; --shadow: rgba(0,0,0,.4); --thumb: rgba(0,0,0,.3);
+  --new: #f0a050; --ok: #6ccb5f; --warn: #fce100; --danger: #ff99a4; --info: #60cdff;
+}
+:root.light {
+  --card: rgba(255,255,255,.7); --card2: rgba(255,255,255,.5); --hover: rgba(0,0,0,.037); --press: rgba(0,0,0,.024);
+  --line: rgba(0,0,0,.058); --ctl: rgba(255,255,255,.7); --ctlhover: rgba(249,249,249,.5); --ctlline: rgba(0,0,0,.073);
+  --fg: rgba(0,0,0,.896); --fg2: rgba(0,0,0,.606); --fg3: rgba(0,0,0,.446); --chip: rgba(0,0,0,.045);
+  --solid: #f9f9f9; --shadow: rgba(0,0,0,.14); --thumb: rgba(0,0,0,.08);
+  --new: #c25e00; --ok: #0f7b0f; --warn: #9d5d00; --danger: #c42b1c; --info: #005fb8;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: transparent; }
+body { color: var(--fg); font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", sans-serif; overflow: hidden; user-select: none; }
+button { font: inherit; color: var(--fg); cursor: pointer; border: 1px solid var(--ctlline); background: var(--ctl); border-radius: 4px; padding: 5px 12px; white-space: nowrap; }
+button:hover { background: var(--ctlhover); }
+button:active { background: var(--press); color: var(--fg2); }
+button.primary { background: var(--accent); border-color: transparent; color: #000; }
+:root.light button.primary { color: #fff; }
+button.primary:hover { filter: brightness(.94); }
+button.ghost { background: transparent; border-color: transparent; }
+button.ghost:hover { background: var(--hover); }
+button.small { padding: 2px 9px; font-size: 13px; }
+button:disabled { opacity: .45; cursor: default; }
+input[type=search], select { font: inherit; color: var(--fg); background: var(--ctl); border: 1px solid var(--ctlline); border-bottom-color: var(--fg3); border-radius: 4px; padding: 5px 10px; outline: none; }
+input[type=search]:focus, select:focus { border-bottom: 2px solid var(--accent); padding-bottom: 4px; background: var(--card2); }
+select option { background: var(--solid); color: var(--fg); }
+input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; cursor: pointer; }
+a { color: var(--accent); cursor: pointer; text-decoration: none; }
+a:hover { text-decoration: underline; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--fg3); border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
+
+#app { display: grid; grid-template-rows: auto auto 1fr; height: 100vh; }
+#top { display: flex; align-items: center; gap: 8px; padding: 12px 18px 8px; flex-wrap: nowrap; }
+.tabs { display: flex; gap: 4px; flex-shrink: 0; }
+.tab { border: 0; background: transparent; padding: 6px 12px; border-radius: 4px; color: var(--fg2); position: relative; }
+.tab:hover { background: var(--hover); }
+.tab.on { background: var(--hover); color: var(--fg); font-weight: 600; }
+.tab.on::after { content: ""; position: absolute; left: 50%; bottom: 1px; width: 16px; height: 3px; margin-left: -8px; border-radius: 2px; background: var(--accent); }
+.tab .count { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 6px; border-radius: 9px; background: var(--chip); color: var(--fg2); font-size: 11px; line-height: 18px; text-align: center; font-weight: 600; }
+.tab .count.hot { background: var(--new); color: #fff; }
+#game { max-width: 220px; }
+#search { flex: 1 1 auto; width: 0; min-width: 120px; max-width: 360px; }
+.spacer { flex: 1; }
+.toggle { display: flex; align-items: center; gap: 6px; color: var(--fg2); cursor: pointer; white-space: nowrap; }
+#syncBtn svg { vertical-align: -3px; margin-right: 4px; }
+#syncBtn.spin svg { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+#notice { margin: 0 18px 8px; }
+.banner { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--fg2); margin-bottom: 6px; }
+.banner .grow { flex: 1; }
+.banner.warn { border-color: rgba(252,225,0,.25); }
+.progress { height: 3px; border-radius: 2px; background: var(--chip); overflow: hidden; position: relative; }
+.progress > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 2px; transition: width .3s; }
+.progress.indet > i { width: 30% !important; animation: indet 1.2s ease-in-out infinite; }
+@keyframes indet { 0% { left: -30%; } 100% { left: 100%; } }
+
+#body { display: grid; grid-template-columns: minmax(0, 1fr) 440px; min-height: 0; }
+#body.nodetail { grid-template-columns: minmax(0, 1fr) 0; }
+#main { overflow: auto; padding: 0 12px 30px 18px; position: relative; }
+#detail { overflow: auto; margin: 0 12px 12px 0; border: 1px solid var(--line); border-radius: 8px; background: var(--card2); }
+#body.nodetail #detail { display: none; }
+
+.bulk { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 8px; padding: 6px 10px; margin: 0 0 6px; border-radius: 6px; background: var(--solid); border: 1px solid var(--line); box-shadow: 0 4px 12px var(--shadow); }
+.bulk[hidden] { display: none; }
+.bulk .grow { flex: 1; }
+.group { display: flex; align-items: center; gap: 10px; margin: 16px 2px 6px; color: var(--fg2); }
+.group:first-child { margin-top: 4px; }
+.group h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--fg); }
+.group .muted { font-size: 12px; }
+.group .grow { flex: 1; }
+.row { display: grid; grid-template-columns: 22px 96px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px 10px; border-radius: 6px; background: var(--card); border: 1px solid transparent; margin-bottom: 4px; cursor: pointer; }
+.row:hover { background: var(--hover); }
+.row.sel { border-color: var(--accent); }
+.row.dim { opacity: .6; }
+.thumb { width: 96px; height: 54px; border-radius: 4px; background: var(--thumb) center/cover no-repeat; overflow: hidden; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.info { min-width: 0; }
+.name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.name .orig { font-weight: 400; color: var(--fg3); margin-left: 6px; font-size: 12px; }
+.sum { color: var(--fg2); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meta { color: var(--fg3); font-size: 12px; display: flex; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
+.meta b { color: var(--new); font-weight: 600; }
+.acts { display: flex; align-items: center; gap: 6px; }
+.chip { display: inline-block; padding: 0 7px; border-radius: 9px; font-size: 11px; line-height: 18px; background: var(--chip); color: var(--fg2); white-space: nowrap; }
+.chip.new { background: var(--new); color: #fff; }
+.chip.ok { color: var(--ok); }
+.chip.warn { color: var(--warn); }
+.chip.bad { color: var(--danger); }
+.chip.acc { color: var(--accent); }
+.empty { text-align: center; color: var(--fg2); padding: 60px 20px; }
+.empty h2 { color: var(--fg); font-weight: 600; margin: 0 0 10px; font-size: 20px; }
+.empty ol { display: inline-block; text-align: left; margin: 10px 0 18px; line-height: 2; }
+.muted { color: var(--fg3); }
+
+/* 详情 */
+.d-pic { width: 100%; aspect-ratio: 16 / 9; background: var(--thumb) center/cover no-repeat; border-radius: 8px 8px 0 0; }
+.d-head { padding: 12px 16px 6px; }
+.d-head h2 { margin: 0; font-size: 18px; line-height: 1.3; user-select: text; }
+.d-head .orig { color: var(--fg3); font-size: 13px; margin-top: 2px; user-select: text; }
+.d-head .meta { margin-top: 6px; }
+.d-sum { padding: 4px 16px 0; color: var(--fg2); user-select: text; white-space: pre-wrap; }
+.d-btns { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 16px; }
+.d-state { margin: 0 16px 8px; padding: 8px 10px; border-radius: 6px; background: var(--card); color: var(--fg2); font-size: 13px; user-select: text; }
+.d-state b { color: var(--fg); }
+.d-tabs { display: flex; gap: 4px; padding: 4px 12px 0; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--solid); z-index: 2; }
+.d-body { padding: 10px 16px 24px; user-select: text; }
+.file { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; background: var(--card); }
+.file.rec { border-color: var(--accent); }
+.file .ft { display: flex; gap: 8px; align-items: flex-start; }
+.file .fn { flex: 1; min-width: 0; font-weight: 600; word-break: break-word; }
+.file .fm { color: var(--fg3); font-size: 12px; margin: 3px 0; display: flex; gap: 8px; flex-wrap: wrap; }
+.file .fd { color: var(--fg2); font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+.cat { margin: 14px 0 6px; font-size: 12px; color: var(--fg3); font-weight: 600; }
+.cl h4 { margin: 12px 0 4px; font-size: 13px; }
+.cl ul { margin: 0; padding-left: 20px; color: var(--fg2); }
+.desc { color: var(--fg2); word-break: break-word; line-height: 1.6; }
+.desc img { max-width: 100%; height: auto; border-radius: 4px; }
+.desc blockquote { margin: 6px 0; padding: 4px 10px; border-left: 3px solid var(--line); }
+.desc .spoiler { border: 1px dashed var(--line); padding: 4px 8px; border-radius: 4px; }
+.desc h1, .desc h2, .desc h3 { font-size: 15px; color: var(--fg); }
+.err { color: var(--danger); }
+
+/* 下载 */
+.job { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; padding: 10px 12px; border-radius: 6px; background: var(--card); margin-bottom: 6px; }
+.job .jn { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job .jm { color: var(--fg3); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job .progress { grid-column: 1 / -1; }
+
+/* 菜单、提示 */
+.menu { position: fixed; z-index: 50; min-width: 200px; padding: 4px; border-radius: 8px; background: var(--solid); border: 1px solid var(--line); box-shadow: 0 8px 24px var(--shadow); }
+.menu button { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 7px 12px; border-radius: 4px; }
+.menu button:hover { background: var(--hover); }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+#toasts { position: fixed; right: 16px; bottom: 16px; z-index: 60; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+.toast { max-width: 420px; padding: 9px 14px; border-radius: 6px; background: var(--solid); border: 1px solid var(--line); box-shadow: 0 6px 18px var(--shadow); color: var(--fg); animation: tin .2s ease-out; }
+.toast.ok { border-left: 3px solid var(--ok); }
+.toast.error { border-left: 3px solid var(--danger); }
+@keyframes tin { from { transform: translateY(8px); opacity: 0; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="top">
+    <div class="tabs">
+      <button class="tab on" data-tab="updates">有更新<span class="count" id="cUpdates">0</span></button>
+      <button class="tab" data-tab="all">全部<span class="count" id="cAll">0</span></button>
+      <button class="tab" data-tab="ignored">已忽略<span class="count" id="cIgnored">0</span></button>
+      <button class="tab" data-tab="jobs">下载<span class="count" id="cJobs">0</span></button>
+    </div>
+    <select id="game" title="按游戏筛选"></select>
+    <input type="search" id="search" placeholder="搜索名字、作者…">
+    <select id="sort" title="排序">
+      <option value="latest">按更新时间</option>
+      <option value="download">按下载时间</option>
+      <option value="name">按名字</option>
+    </select>
+    <label class="toggle" title="自动翻译 mod 名字、简介和说明"><input type="checkbox" id="trToggle">翻译</label>
+    <button id="syncBtn" class="primary" title="重新读取下载记录并检查更新"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>检查更新</button>
+  </div>
+  <div id="notice"></div>
+  <div id="body" class="nodetail">
+    <div id="main"></div>
+    <div id="detail"></div>
+  </div>
+</div>
+<div id="toasts"></div>
+<script>window.__nmuScope = '.tr-scope';</script>
+<script src="translate.js"></script>
+<script>
+'use strict';
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// ---- 和程序通信 ----
+let seq = 0;
+const pending = new Map();
+function call(method, args) {
+  return new Promise((res, rej) => {
+    const id = ++seq;
+    pending.set(id, { res, rej });
+    chrome.webview.postMessage({ id, method, args: args || {} });
+  });
+}
+function log(message) { chrome.webview.postMessage({ method: 'log', args: { message: String(message) } }); }
+window.addEventListener('error', e => log('脚本错误：' + e.message + ' @' + e.lineno));
+chrome.webview.addEventListener('message', e => {
+  const d = e.data;
+  if (!d || d.nmu) return;
+  if (d.event) { onEvent(d); return; }
+  const p = pending.get(d.id);
+  if (!p) return;
+  pending.delete(d.id);
+  d.ok ? p.res(d.result) : p.rej(new Error(d.error || '出错了'));
+});
+
+// ---- 状态 ----
+const S = {
+  tab: 'updates', game: '', q: '', sort: 'latest',
+  mods: [], byKey: new Map(), status: {}, jobs: new Map(),
+  sel: new Set(), detailKey: null, detail: null, dtab: 'files',
+  tr: new Map(), trOn: true, sync: { text: '', pct: -1 }
+};
+try {
+  const saved = JSON.parse(localStorage.getItem('nmu.view') || '{}');
+  if (saved.sort) S.sort = saved.sort;
+  if (saved.game != null) S.game = saved.game;
+} catch (e) {}
+function saveView() { try { localStorage.setItem('nmu.view', JSON.stringify({ sort: S.sort, game: S.game })); } catch (e) {} }
+
+const params = new URLSearchParams(location.search);
+applyTheme(params.get('theme'), params.get('accent'));
+function applyTheme(theme, accent) {
+  document.documentElement.classList.toggle('light', theme === 'light');
+  if (accent) document.documentElement.style.setProperty('--accent', accent);
+}
+
+// ---- 时间 ----
+function ago(ts) {
+  if (!ts) return '未知';
+  const s = Date.now() / 1000 - ts;
+  if (s < 60) return '刚刚';
+  if (s < 3600) return Math.floor(s / 60) + ' 分钟前';
+  if (s < 86400) return Math.floor(s / 3600) + ' 小时前';
+  if (s < 86400 * 30) return Math.floor(s / 86400) + ' 天前';
+  if (s < 86400 * 365) return Math.floor(s / 86400 / 30) + ' 个月前';
+  return (s / 86400 / 365).toFixed(1).replace(/\.0$/, '') + ' 年前';
+}
+function date(ts) {
+  if (!ts) return '';
+  const d = new Date(ts * 1000);
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+function size(kb) {
+  if (!kb) return '';
+  if (kb < 1024) return kb + ' KB';
+  if (kb < 1024 * 1024) return (kb / 1024).toFixed(1) + ' MB';
+  return (kb / 1024 / 1024).toFixed(2) + ' GB';
+}
+function bytes(b) { return size(Math.round(b / 1024)); }
+
+// ---- 翻译（名字、简介） ----
+const trWait = new Set();
+let trTimer = 0;
+function tr(text) {
+  if (!S.trOn || !text) return null;
+  const t = S.tr.get(text);
+  if (t !== undefined) return t === text ? null : t;
+  trWait.add(text);
+  if (!trTimer) trTimer = setTimeout(flushTr, 60);
+  return null;
+}
+async function flushTr() {
+  trTimer = 0;
+  const all = Array.from(trWait);
+  trWait.clear();
+  for (let i = 0; i < all.length; i += 60) {
+    const batch = all.slice(i, i + 60);
+    batch.forEach(t => S.tr.set(t, t));
+    try {
+      const r = await call('translate', { texts: batch });
+      batch.forEach((t, j) => { if (r[j]) S.tr.set(t, r[j]); });
+    } catch (e) {
+      batch.forEach(t => S.tr.delete(t));
+      toast('翻译失败：' + e.message, 'error');
+      return;
+    }
+    applyTr();
+  }
+}
+// 已经画出来的地方换上译文
+function applyTr() {
+  $$('[data-tr]').forEach(el => {
+    const src = el.getAttribute('data-tr');
+    const t = S.trOn ? S.tr.get(src) : null;
+    if (t && t !== src) {
+      el.textContent = t;
+      const o = el.parentElement && el.parentElement.querySelector(':scope > .orig');
+      if (o) o.hidden = false;
+    }
+  });
+}
+function trSpan(text, cls) {
+  const t = tr(text);
+  return '<span class="' + (cls || '') + '" data-tr="' + esc(text) + '">' + esc(t || text) + '</span>';
+}
+
+// ---- 列表 ----
+function igLabel(m) {
+  if (m.ignore === 'perm') return '<span class="chip bad">永久忽略</span>';
+  if (m.ignore === 'temp') return m.ignoreActive ? '<span class="chip warn">暂时忽略</span>' : '<span class="chip warn">暂时忽略（又有新更新）</span>';
+  return '';
+}
+function inTab(m, tab) {
+  if (tab === 'updates') return m.hasUpdate && !m.ignoreActive;
+  if (tab === 'ignored') return m.ignore !== 'none';
+  return true;
+}
+function visible() {
+  const q = S.q.trim().toLowerCase();
+  let list = S.mods.filter(m => inTab(m, S.tab));
+  if (S.game) list = list.filter(m => m.domain === S.game);
+  if (q) list = list.filter(m => (m.name + ' ' + (S.tr.get(m.name) || '') + ' ' + m.author + ' ' + m.modId + ' ' + m.game).toLowerCase().includes(q));
+  const by = {
+    latest: (a, b) => (b.latest || 0) - (a.latest || 0),
+    download: (a, b) => (b.lastDownload || b.baseline || 0) - (a.lastDownload || a.baseline || 0),
+    name: (a, b) => a.name.localeCompare(b.name)
+  }[S.sort];
+  list.sort(by);
+  return list;
+}
+function counts() {
+  const c = { updates: 0, all: S.mods.length, ignored: 0 };
+  S.mods.forEach(m => { if (inTab(m, 'updates')) c.updates++; if (m.ignore !== 'none') c.ignored++; });
+  $('#cUpdates').textContent = c.updates;
+  $('#cUpdates').classList.toggle('hot', c.updates > 0);
+  $('#cAll').textContent = c.all;
+  $('#cIgnored').textContent = c.ignored;
+  const active = Array.from(S.jobs.values()).filter(j => !['done', 'failed', 'canceled'].includes(j.status)).length;
+  $('#cJobs').textContent = active || S.jobs.size;
+  $('#cJobs').classList.toggle('hot', active > 0);
+  call('counts', { updates: c.updates }).catch(() => {});
+}
+function gameOptions() {
+  const sel = $('#game');
+  const map = new Map();
+  S.mods.filter(m => inTab(m, S.tab === 'jobs' ? 'all' : S.tab)).forEach(m => {
+    const g = map.get(m.domain) || { name: m.game || m.domain, n: 0 };
+    g.n++;
+    map.set(m.domain, g);
+  });
+  const games = Array.from(map.entries()).sort((a, b) => b[1].n - a[1].n);
+  if (S.game && !map.has(S.game) && !S.mods.some(m => m.domain === S.game)) S.game = '';
+  sel.innerHTML = '<option value="">全部游戏</option>' + games.map(([d, g]) => '<option value="' + esc(d) + '"' + (d === S.game ? ' selected' : '') + '>' + esc(g.name) + '（' + g.n + '）</option>').join('');
+  if (S.game && !map.has(S.game)) sel.insertAdjacentHTML('beforeend', '<option value="' + esc(S.game) + '" selected>' + esc(S.game) + '（0）</option>');
+}
+
+function rowHtml(m) {
+  const pic = m.picture ? '<img loading="lazy" src="' + esc(m.picture) + '" onerror="this.remove()">' : '';
+  const name = trSpan(m.name);
+  const tName = tr(m.name);
+  const sum = m.summary ? trSpan(m.summary.split('\n')[0]) : '<span class="muted">' + (m.hasInfo ? '' : '（还没查到详细信息）') + '</span>';
+  const chips = [];
+  if (m.hasUpdate) chips.push('<span class="chip new">有更新</span>');
+  if (!m.available) chips.push('<span class="chip bad">' + (m.status === 'removed' ? '已删除' : '不可用') + '</span>');
+  const ig = igLabel(m);
+  if (ig) chips.push(ig);
+  if (m.installed) chips.push('<span class="chip ok" title="' + esc(m.installed.path) + '">已装 ' + esc(m.installed.version || '') + '</span>');
+  if (m.busy) chips.push('<span class="chip acc">下载中</span>');
+  const when = m.hasUpdate
+    ? '<b>更新于 ' + ago(m.latest) + '</b><span title="' + date(m.baseline) + '">你的版本：' + ago(m.baseline) + '</span>'
+    : '<span title="' + date(m.latest) + '">更新于 ' + ago(m.latest) + '</span><span title="' + date(m.baseline) + '">下载于 ' + ago(m.lastDownload || m.baseline) + '</span>';
+  return '<div class="row' + (S.detailKey === m.key ? ' sel' : '') + (m.ignoreActive ? ' dim' : '') + '" data-key="' + esc(m.key) + '">' +
+    '<input type="checkbox" class="pick"' + (S.sel.has(m.key) ? ' checked' : '') + '>' +
+    '<div class="thumb">' + pic + '</div>' +
+    '<div class="info"><div class="name">' + name + '<span class="orig"' + (tName ? '' : ' hidden') + '>' + esc(m.name) + '</span></div>' +
+    '<div class="sum">' + sum + '</div>' +
+    '<div class="meta"><span>' + esc(m.game) + '</span>' + (m.author ? '<span>' + esc(m.author) + '</span>' : '') + (m.version ? '<span>v' + esc(m.version) + '</span>' : '') + when + '</div></div>' +
+    '<div class="acts">' + chips.join('') +
+    (m.hasUpdate && m.available ? '<button class="small primary act-update"' + (m.busy ? ' disabled' : '') + '>更新</button>' : '') +
+    '<button class="small ghost act-menu" title="更多">⋯</button></div></div>';
+}
+
+function emptyHtml() {
+  const st = S.status;
+  if (!S.mods.length) {
+    return '<div class="empty"><h2>欢迎</h2>还没有读到你下载过的 mod。按下面三步开始：<br><ol>' +
+      '<li>' + (st.hasKey ? (st.keyValid ? '✓ API Key 已填写（' + esc(st.user) + '）' : 'API Key 还没验证通过') : '在 <a data-go="settings">设置</a> 里填写 N 网 API Key') + '</li>' +
+      '<li>在「N网」页登录（用来读取你的 <a data-go="login">下载记录</a>）</li>' +
+      '<li>点右上角「检查更新」</li></ol><br><button class="primary" data-go="sync">检查更新</button></div>';
+  }
+  if (S.tab === 'updates') return '<div class="empty"><h2>全部是最新的</h2>' + (S.game ? '这个游戏' : '') + '没有需要更新的 mod。上次检查：' + ago(st.lastSync) + '</div>';
+  if (S.tab === 'ignored') return '<div class="empty"><h2>没有忽略的 mod</h2>在 mod 右边的「⋯」里可以暂时忽略（下次有更新再提醒）或永久忽略。</div>';
+  return '<div class="empty">没有符合条件的 mod</div>';
+}
+
+function renderList() {
+  counts();
+  gameOptions();
+  const main = $('#main');
+  if (S.tab === 'jobs') { renderJobs(); return; }
+  const list = visible();
+  const keys = new Set(list.map(m => m.key));
+  Array.from(S.sel).forEach(k => { if (!keys.has(k)) S.sel.delete(k); });
+  const top = main.scrollTop;
+  if (!list.length) { main.innerHTML = emptyHtml(); return; }
+  let html = bulkHtml();
+  if (S.game) html += list.map(rowHtml).join('');
+  else {
+    // 按游戏分组
+    const groups = new Map();
+    list.forEach(m => { if (!groups.has(m.domain)) groups.set(m.domain, []); groups.get(m.domain).push(m); });
+    const folders = new Set(S.status.games || []);
+    groups.forEach((items, d) => {
+      html += '<div class="group"><h3>' + esc(items[0].game) + '</h3><span class="muted">' + items.length + ' 个</span>' +
+        (folders.has(d) ? '<a class="muted" data-folder="' + esc(d) + '">打开 mod 文件夹</a>' : '<a data-choose="' + esc(d) + '">设置 mod 文件夹</a>') +
+        '<span class="grow"></span>' +
+        (S.tab === 'updates' && items.length > 1 ? '<button class="small" data-update-game="' + esc(d) + '">全部更新</button>' : '') + '</div>';
+      html += items.map(rowHtml).join('');
+    });
+  }
+  main.innerHTML = html;
+  main.scrollTop = top;
+}
+
+function bulkHtml() {
+  const n = S.sel.size;
+  return '<div class="bulk"' + (n ? '' : ' hidden') + '><input type="checkbox" id="pickAll" title="全选"' + (n ? ' checked' : '') + '><span>已选 ' + n + ' 个</span><span class="grow"></span>' +
+    '<button class="small primary" data-bulk="update">更新所选</button>' +
+    '<button class="small" data-bulk="temp" title="这次的更新不提醒，以后再有更新时再出现">暂时忽略</button>' +
+    '<button class="small" data-bulk="perm" title="再也不提醒这个 mod 的更新">永久忽略</button>' +
+    '<button class="small" data-bulk="none">取消忽略</button>' +
+    '<button class="small" data-bulk="mark" title="不下载，当作已经是最新的">标记为最新</button>' +
+    '<button class="small ghost" data-bulk="clear">取消选择</button></div>';
+}
+
+function updateBulk() {
+  const b = $('.bulk');
+  if (!b) return;
+  b.outerHTML = bulkHtml();
+}
+
+// ---- 下载页 ----
+const STATUS = { waiting: '排队中', link: '获取地址', browser: '等你在网页上点下载', downloading: '下载中', installing: '安装中', done: '完成', failed: '失败', canceled: '已取消' };
+function jobHtml(j) {
+  const fin = ['done', 'failed', 'canceled'].includes(j.status);
+  const pct = j.total > 0 ? Math.min(100, j.received * 100 / j.total) : 0;
+  const right = [];
+  if (j.status === 'browser') right.push('<button class="small" data-job-site="' + j.id + '">去网页</button>');
+  if (!fin) right.push('<button class="small" data-job-cancel="' + j.id + '">取消</button>');
+  if (j.status === 'failed' || j.status === 'canceled') right.push('<button class="small" data-job-retry="' + j.id + '">重试</button>');
+  if (j.status === 'done' && j.path) right.push('<button class="small" data-path="' + esc(j.path) + '">打开文件夹</button>');
+  let info = STATUS[j.status] || j.status;
+  if (j.status === 'downloading') info += ' ' + (j.total > 0 ? Math.floor(pct) + '% · ' + bytes(j.received) + ' / ' + bytes(j.total) : bytes(j.received)) + (j.speed > 0 ? ' · ' + bytes(j.speed) + '/s' : '');
+  if (j.message) info += ' · ' + j.message;
+  return '<div class="job"><div style="min-width:0"><div class="jn">' + esc(j.modName || j.fileName) + ' <span class="muted" style="font-weight:400">' + esc(j.fileTitle || '') + ' ' + esc(j.version || '') + '</span></div>' +
+    '<div class="jm ' + (j.status === 'failed' ? 'err' : '') + '" title="' + esc(j.message) + '">' + esc(j.game) + ' · ' + esc(info) + '</div></div>' +
+    '<div class="acts">' + right.join('') + '</div>' +
+    (fin ? '' : '<div class="progress' + (j.status === 'downloading' && j.total > 0 ? '' : ' indet') + '"><i style="width:' + pct + '%"></i></div>') + '</div>';
+}
+function renderJobs() {
+  const jobs = Array.from(S.jobs.values()).sort((a, b) => b.createdAt - a.createdAt);
+  const main = $('#main');
+  if (!jobs.length) { main.innerHTML = '<div class="empty"><h2>没有下载任务</h2>' + (S.status.premium ? '会员可以一键下载。' : '非会员：点「更新」后程序会打开「N网」页的下载页面，在那里点一下「Slow download」，之后的下载、解压、替换旧版本都会自动完成。') + '</div>'; return; }
+  main.innerHTML = '<div class="group"><h3>下载任务</h3><span class="grow"></span><button class="small" id="clearJobs">清除已完成</button></div>' + jobs.map(jobHtml).join('');
+}
+
+// ---- 详情 ----
+async function openDetail(key, force) {
+  const m = S.byKey.get(key);
+  if (!m) return;
+  S.detailKey = key;
+  $('#body').classList.remove('nodetail');
+  $$('.row.sel').forEach(r => r.classList.remove('sel'));
+  const row = $('.row[data-key="' + CSS.escape(key) + '"]');
+  if (row) row.classList.add('sel');
+  if (!S.detail || S.detail.key !== key) {
+    S.detail = { key, name: m.name, picture: m.picture, summary: m.summary, loading: true, domain: m.domain, modId: m.modId, game: m.game };
+    renderDetail();
+  }
+  try {
+    const d = await call('detail', { domain: m.domain, modId: m.modId, force: !!force });
+    if (S.detailKey !== key) return;
+    S.detail = d;
+    renderDetail();
+  } catch (e) {
+    if (S.detailKey !== key) return;
+    S.detail.loading = false;
+    S.detail.errors = [e.message];
+    renderDetail();
+  }
+}
+function closeDetail() {
+  S.detailKey = null;
+  S.detail = null;
+  $('#body').classList.add('nodetail');
+  $$('.row.sel').forEach(r => r.classList.remove('sel'));
+}
+
+function renderDetail() {
+  const d = S.detail;
+  const el = $('#detail');
+  if (!d) { el.innerHTML = ''; return; }
+  const m = S.byKey.get(d.key) || {};
+  const tName = tr(d.name);
+  const url = 'https://www.nexusmods.com/' + d.domain + '/mods/' + d.modId;
+  let h = '';
+  h += '<div class="d-pic" style="background-image:url(\'' + esc(d.picture || '') + '\')"></div>';
+  h += '<div class="d-head"><div style="display:flex;gap:8px;align-items:flex-start"><h2 style="flex:1">' + trSpan(d.name) + '</h2><button class="small ghost" id="dClose" title="关闭">✕</button></div>' +
+    '<div class="orig"' + (tName ? '' : ' hidden') + '>' + esc(d.name) + '</div>' +
+    '<div class="meta"><span>' + esc(d.game || m.game || '') + '</span>' + (d.author ? '<span>作者 ' + esc(d.author) + '</span>' : '') + (d.version ? '<span>v' + esc(d.version) + '</span>' : '') +
+    (d.endorsements ? '<span>👍 ' + d.endorsements + '</span>' : '') + (d.downloads ? '<span>下载 ' + d.downloads + '</span>' : '') + '<span>ID ' + d.modId + '</span></div></div>';
+  if (d.summary) h += '<div class="d-sum tr-scope"><p style="margin:0">' + esc(d.summary).replace(/\n/g, '<br>') + '</p></div>';
+  const busy = m.busy;
+  h += '<div class="d-btns">' +
+    (m.hasUpdate && d.available !== false ? '<button class="primary" id="dUpdate"' + (busy ? ' disabled' : '') + '>' + (busy ? '下载中…' : '更新') + '</button>' : '') +
+    '<button id="dPosts">评论区</button><button id="dPage">N网页面</button>' +
+    (d.installed ? '<button data-path="' + esc(d.installed.path) + '">打开已装位置</button>' : (d.folder ? '<button data-folder="' + esc(d.domain) + '">打开 mod 文件夹</button>' : '<button data-choose="' + esc(d.domain) + '">设置 mod 文件夹</button>')) +
+    '<button id="dIgnore">忽略 ▾</button><button class="ghost" id="dRefresh" title="重新获取">刷新</button></div>';
+  const st = [];
+  if (d.lastDownload || d.baseline) st.push('你的版本：<b>' + (d.installed ? esc(d.installed.version || d.installed.fileName) + '，' : '') + '下载于 ' + date(d.lastDownload || d.baseline) + '</b>');
+  if (d.latest) st.push('最新文件：<b>' + date(d.latest) + '</b>' + (m.hasUpdate ? ' <span class="chip new">有更新</span>' : ' <span class="chip ok">已是最新</span>'));
+  if (d.ignore && d.ignore !== 'none') st.push(d.ignore === 'perm' ? '已永久忽略' : (d.ignoreActive ? '已暂时忽略这次更新' : '暂时忽略过，但又有了新更新'));
+  if (d.available === false) st.push('<span class="err">这个 mod 已经被删除或隐藏</span>');
+  (d.errors || []).forEach(e => st.push('<span class="err">' + esc(e) + '</span>'));
+  if (d.loading) st.push('正在获取详情…');
+  if (st.length) h += '<div class="d-state">' + st.join('<br>') + '</div>';
+  h += '<div class="d-tabs">' + [['files', '文件' + (d.files ? '（' + d.files.length + '）' : '')], ['log', '更新日志'], ['desc', '简介']].map(([k, t]) =>
+    '<button class="tab' + (S.dtab === k ? ' on' : '') + '" data-dtab="' + k + '">' + t + '</button>').join('') + '</div>';
+  h += '<div class="d-body tr-scope">' + detailBody(d) + '</div>';
+  const top = el.scrollTop;
+  el.innerHTML = h;
+  el.scrollTop = d.loading ? 0 : top;
+  if (S.trOn && window.__nmuTr) window.__nmuTr.scan();
+}
+
+const CATS = { 1: '主文件', 2: '更新补丁', 3: '可选文件', 4: '旧版本', 5: '其他', 6: '已删除', 7: '已归档' };
+function detailBody(d) {
+  if (S.dtab === 'files') {
+    if (!d.files) return d.loading ? '<div class="muted">加载中…</div>' : '<div class="muted">没有文件列表' + (S.status.hasKey ? '' : '（需要 API Key）') + '</div>';
+    if (!d.files.length) return '<div class="muted">这个 mod 没有文件</div>';
+    let h = '', cat = -1;
+    d.files.forEach(f => {
+      if (f.categoryId !== cat) {
+        cat = f.categoryId;
+        h += '<div class="cat">' + esc(CATS[cat] || f.category || '文件') + '</div>';
+      }
+      const chips = [];
+      if (f.recommended) chips.push('<span class="chip acc">更新会下载这个</span>');
+      if (f.isNew) chips.push('<span class="chip new">新</span>');
+      if (f.installed) chips.push('<span class="chip ok">已装</span>');
+      if (f.primary) chips.push('<span class="chip">默认</span>');
+      h += '<div class="file' + (f.recommended ? ' rec' : '') + '"><div class="ft"><div class="fn"><p style="margin:0">' + esc(f.name) + '</p></div>' +
+        '<button class="small' + (f.recommended ? ' primary' : '') + '" data-dl="' + f.fileId + '">下载</button></div>' +
+        '<div class="fm">' + chips.join('') + (f.version ? '<span>v' + esc(f.version) + '</span>' : '') + '<span>' + date(f.uploaded) + '</span><span>' + size(f.sizeKb) + '</span><span title="' + esc(f.fileName) + '">' + esc(f.fileName) + '</span></div>' +
+        (f.description ? '<div class="fd"><p style="margin:0">' + esc(f.description).replace(/\n/g, '<br>') + '</p></div>' : '') + '</div>';
+    });
+    return h;
+  }
+  if (S.dtab === 'log') {
+    if (!d.changelog || !d.changelog.length) return '<div class="muted">' + (d.loading ? '加载中…' : '作者没有写更新日志') + '</div>';
+    return '<div class="cl">' + d.changelog.map(c => '<h4>' + esc(c.version) + '</h4><ul>' + (c.lines || []).map(l => '<li>' + esc(l) + '</li>').join('') + '</ul>').join('') + '</div>';
+  }
+  if (!d.description) return '<div class="muted">' + (d.loading ? '加载中…' : '没有简介') + '</div>';
+  return '<div class="desc">' + bbcode(d.description) + '</div>';
+}
+
+// N 网简介是 BBCode
+function bbcode(src) {
+  let s = String(src).replace(/<br\s*\/?>/gi, '\n').replace(/\r/g, '');
+  s = s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, '&');
+  s = esc(s);
+  const safeUrl = u => /^https?:\/\//i.test(u) ? u : '';
+  const rules = [
+    [/\[b\]([\s\S]*?)\[\/b\]/gi, '<b>$1</b>'],
+    [/\[i\]([\s\S]*?)\[\/i\]/gi, '<i>$1</i>'],
+    [/\[u\]([\s\S]*?)\[\/u\]/gi, '<u>$1</u>'],
+    [/\[s\]([\s\S]*?)\[\/s\]/gi, '<s>$1</s>'],
+    [/\[size=?[^\]]*\]([\s\S]*?)\[\/size\]/gi, '$1'],
+    [/\[font=?[^\]]*\]([\s\S]*?)\[\/font\]/gi, '$1'],
+    [/\[color=?[^\]]*\]([\s\S]*?)\[\/color\]/gi, '$1'],
+    [/\[(center|left|right|justify)\]([\s\S]*?)\[\/\1\]/gi, '<div style="text-align:$1">$2</div>'],
+    [/\[heading\]([\s\S]*?)\[\/heading\]/gi, '<h3>$1</h3>'],
+    [/\[quote(?:=[^\]]*)?\]([\s\S]*?)\[\/quote\]/gi, '<blockquote>$1</blockquote>'],
+    [/\[spoiler(?:=[^\]]*)?\]([\s\S]*?)\[\/spoiler\]/gi, '<details class="spoiler"><summary>剧透 / 展开</summary>$1</details>'],
+    [/\[code\]([\s\S]*?)\[\/code\]/gi, '<code>$1</code>'],
+    [/\[line\]/gi, '<hr>'],
+    [/\[\*\]/g, '\u0001'],
+    [/\[\/?(list|ul|ol)(=[^\]]*)?\]/gi, '\u0002']
+  ];
+  for (let k = 0; k < 3; k++) rules.forEach(([re, to]) => { s = s.replace(re, to); });
+  s = s.replace(/\[img(?:=[^\]]*)?\]([\s\S]*?)\[\/img\]/gi, (m, u) => safeUrl(u.trim()) ? '<img loading="lazy" src="' + u.trim() + '">' : '');
+  s = s.replace(/\[url=([^\]]+)\]([\s\S]*?)\[\/url\]/gi, (m, u, t) => safeUrl(u.replace(/&quot;/g, '').trim()) ? '<a data-href="' + u.replace(/&quot;/g, '').trim() + '">' + t + '</a>' : t);
+  s = s.replace(/\[url\]([\s\S]*?)\[\/url\]/gi, (m, u) => safeUrl(u.trim()) ? '<a data-href="' + u.trim() + '">' + u.trim() + '</a>' : u);
+  s = s.replace(/\[youtube\]([\w\-]+)\[\/youtube\]/gi, '<a data-href="https://www.youtube.com/watch?v=$1">YouTube 视频</a>');
+  // 列表
+  s = s.replace(/\u0002([\s\S]*?)\u0002/g, (m, inner) => '<ul>' + inner.split('\u0001').filter(x => x.trim()).map(x => '<li>' + x.trim() + '</li>').join('') + '</ul>');
+  s = s.replace(/[\u0001\u0002]/g, '');
+  // 段落：空行分段，单换行变 <br>
+  s = s.split(/\n{2,}/).map(p => '<p>' + p.trim().replace(/\n/g, '<br>') + '</p>').join('');
+  return s.replace(/<p>\s*<\/p>/g, '');
+}
+
+// ---- 菜单 ----
+function menu(x, y, items) {
+  closeMenu();
+  const el = document.createElement('div');
+  el.className = 'menu';
+  el.innerHTML = items.map((it, i) => it === '-' ? '<hr>' : '<button data-i="' + i + '">' + esc(it[0]) + '</button>').join('');
+  document.body.appendChild(el);
+  const r = el.getBoundingClientRect();
+  el.style.left = Math.min(x, innerWidth - r.width - 8) + 'px';
+  el.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
+  el.addEventListener('click', e => {
+    const b = e.target.closest('button[data-i]');
+    if (!b) return;
+    closeMenu();
+    items[+b.dataset.i][1]();
+  });
+  setTimeout(() => document.addEventListener('mousedown', outside), 0);
+  function outside(e) { if (!el.contains(e.target)) closeMenu(); }
+  el._outside = outside;
+}
+function closeMenu() {
+  const m = $('.menu');
+  if (m) { document.removeEventListener('mousedown', m._outside); m.remove(); }
+}
+function modMenu(m, x, y) {
+  const url = 'https://www.nexusmods.com/' + m.domain + '/mods/' + m.modId;
+  const items = [];
+  if (m.hasUpdate && m.available) items.push(['更新', () => doUpdate([m.key])]);
+  items.push(['暂时忽略这次更新', () => setIgnore([m.key], 'temp')]);
+  items.push(['永久忽略', () => setIgnore([m.key], 'perm')]);
+  if (m.ignore !== 'none') items.push(['取消忽略', () => setIgnore([m.key], 'none')]);
+  items.push(['标记为已是最新（不下载）', () => call('markUpToDate', { keys: [m.key] })]);
+  items.push('-');
+  items.push(['评论区', () => call('openSite', { url: url + '?tab=posts' })]);
+  items.push(['N网页面', () => call('openSite', { url })]);
+  items.push(['用系统浏览器打开', () => call('openExternal', { url })]);
+  if (m.installed) items.push(['打开已装位置', () => call('openFolder', { path: m.installed.path }).catch(e => toast(e.message, 'error'))]);
+  items.push('-');
+  items.push(['从列表里移除', () => call('remove', { keys: [m.key] })]);
+  menu(x, y, items);
+}
+
+// ---- 操作 ----
+async function setIgnore(keys, kind) {
+  await call('ignore', { keys, kind });
+  const t = { temp: '已暂时忽略（以后有新更新时再提醒）', perm: '已永久忽略', none: '已取消忽略' }[kind];
+  toast(t + (keys.length > 1 ? '：' + keys.length + ' 个' : ''), 'ok');
+}
+async function doUpdate(keys) {
+  if (!keys.length) return;
+  if (!S.status.hasKey) { toast('先在设置里填写 N 网 API Key', 'error'); call('settings'); return; }
+  toast('正在准备 ' + keys.length + ' 个更新…');
+  let r;
+  try { r = await call('update', { keys }); } catch (e) { toast(e.message, 'error'); return; }
+  const ok = r.filter(x => x.ok).length;
+  const choose = r.filter(x => x.needChoice);
+  const bad = r.filter(x => !x.ok && !x.needChoice);
+  if (ok) toast('已加入下载：' + ok + ' 个' + (S.status.premium ? '' : '（非会员需要在「N网」页逐个点 Slow download）'), 'ok');
+  bad.forEach(x => toast(x.name + '：' + x.message, 'error'));
+  if (choose.length) {
+    toast(choose.map(x => x.name).join('、') + '：' + choose[0].message, 'error');
+    S.dtab = 'files';
+    openDetail(choose[0].key);
+  }
+}
+
+function toast(text, kind) {
+  const el = document.createElement('div');
+  el.className = 'toast ' + (kind || '');
+  el.textContent = text;
+  $('#toasts').appendChild(el);
+  setTimeout(() => el.remove(), kind === 'error' ? 7000 : 3500);
+}
+
+// ---- 事件 ----
+document.addEventListener('click', e => {
+  const t = e.target;
+  const go = t.closest('[data-go]');
+  if (go) {
+    const g = go.dataset.go;
+    if (g === 'settings') call('settings');
+    else if (g === 'login') call('login');
+    else if (g === 'sync') call('sync');
+    return;
+  }
+  const tab = t.closest('.tab[data-tab]');
+  if (tab) {
+    S.tab = tab.dataset.tab;
+    $$('.tab[data-tab]').forEach(b => b.classList.toggle('on', b === tab));
+    S.sel.clear();
+    renderList();
+    return;
+  }
+  const dtab = t.closest('[data-dtab]');
+  if (dtab) { S.dtab = dtab.dataset.dtab; renderDetail(); return; }
+  const href = t.closest('a[data-href]');
+  if (href) { e.preventDefault(); const u = href.dataset.href; call(/nexusmods\.com/i.test(u) ? 'openSite' : 'openExternal', { url: u }); return; }
+  const folder = t.closest('[data-folder]');
+  if (folder) { call('openFolder', { domain: folder.dataset.folder }).catch(err => toast(err.message, 'error')); return; }
+  const path = t.closest('[data-path]');
+  if (path) { call('openFolder', { path: path.dataset.path }).catch(err => toast(err.message, 'error')); return; }
+  const choose = t.closest('[data-choose]');
+  if (choose) { call('chooseFolder', { domain: choose.dataset.choose }).then(() => call('status').then(st => { S.status = st; renderList(); if (S.detailKey) openDetail(S.detailKey); })); return; }
+  const ug = t.closest('[data-update-game]');
+  if (ug) { doUpdate(visible().filter(m => m.domain === ug.dataset.updateGame && m.hasUpdate && m.available && !m.busy).map(m => m.key)); return; }
+  const bulk = t.closest('[data-bulk]');
+  if (bulk) {
+    const keys = Array.from(S.sel);
+    const k = bulk.dataset.bulk;
+    if (k === 'clear') { S.sel.clear(); renderList(); }
+    else if (k === 'update') doUpdate(keys.filter(x => { const m = S.byKey.get(x); return m && m.hasUpdate && m.available; }));
+    else if (k === 'mark') call('markUpToDate', { keys });
+    else setIgnore(keys, k);
+    if (k !== 'update') S.sel.clear();
+    return;
+  }
+  if (t.id === 'pickAll') {
+    if (t.checked) visible().forEach(m => S.sel.add(m.key)); else S.sel.clear();
+    renderList();
+    return;
+  }
+  // 下载任务
+  const jc = t.closest('[data-job-cancel]'); if (jc) { call('cancelJob', { id: jc.dataset.jobCancel }); return; }
+  const jr = t.closest('[data-job-retry]'); if (jr) { call('retryJob', { id: jr.dataset.jobRetry }); return; }
+  const js = t.closest('[data-job-site]');
+  if (js) { const j = S.jobs.get(js.dataset.jobSite); if (j) call('openSite', { url: 'https://www.nexusmods.com/' + j.domain + '/mods/' + j.modId + '?tab=files&file_id=' + j.fileId + '&nmm=1', translate: false }); return; }
+  if (t.id === 'clearJobs') { call('clearJobs').then(() => { Array.from(S.jobs.values()).filter(j => ['done', 'failed', 'canceled'].includes(j.status)).forEach(j => S.jobs.delete(j.id)); renderList(); }); return; }
+  // 详情
+  if (t.id === 'dClose') { closeDetail(); return; }
+  if (t.id === 'dRefresh') { openDetail(S.detailKey, true); return; }
+  if (t.id === 'dUpdate') { doUpdate([S.detailKey]); return; }
+  if (t.id === 'dPosts' || t.id === 'dPage') {
+    const d = S.detail;
+    call('openSite', { url: 'https://www.nexusmods.com/' + d.domain + '/mods/' + d.modId + (t.id === 'dPosts' ? '?tab=posts' : '') });
+    return;
+  }
+  if (t.id === 'dIgnore') { const m = S.byKey.get(S.detailKey); const r = t.getBoundingClientRect(); if (m) modMenu(m, r.left, r.bottom + 4); return; }
+  const dl = t.closest('[data-dl]');
+  if (dl) {
+    const d = S.detail;
+    if (!S.status.hasKey) { toast('先在设置里填写 N 网 API Key', 'error'); return; }
+    call('download', { domain: d.domain, modId: d.modId, fileId: +dl.dataset.dl }).then(r => toast(r.ok ? '已加入下载' : r.message, r.ok ? 'ok' : 'error')).catch(err => toast(err.message, 'error'));
+    return;
+  }
+  // 列表行
+  const row = t.closest('.row');
+  if (row) {
+    const key = row.dataset.key;
+    const m = S.byKey.get(key);
+    if (t.classList.contains('pick')) {
+      if (t.checked) S.sel.add(key); else S.sel.delete(key);
+      updateBulk();
+      return;
+    }
+    if (t.closest('.act-update')) { doUpdate([key]); return; }
+    if (t.closest('.act-menu')) { const r = t.getBoundingClientRect(); modMenu(m, r.left - 160, r.bottom + 4); return; }
+    openDetail(key);
+  }
+});
+document.addEventListener('contextmenu', e => {
+  const row = e.target.closest('.row');
+  if (!row) return;
+  e.preventDefault();
+  const m = S.byKey.get(row.dataset.key);
+  if (m) modMenu(m, e.clientX, e.clientY);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { if ($('.menu')) closeMenu(); else if (S.detailKey) closeDetail(); }
+  if (e.key === 'F5') { e.preventDefault(); call('sync'); }
+});
+$('#game').addEventListener('change', e => { S.game = e.target.value; saveView(); renderList(); });
+$('#sort').addEventListener('change', e => { S.sort = e.target.value; saveView(); renderList(); });
+$('#sort').value = S.sort;
+let qTimer = 0;
+$('#search').addEventListener('input', e => { clearTimeout(qTimer); qTimer = setTimeout(() => { S.q = e.target.value; renderList(); }, 150); });
+$('#syncBtn').addEventListener('click', () => call('sync'));
+$('#trToggle').addEventListener('change', async e => {
+  S.trOn = e.target.checked;
+  S.status = await call('setAutoTranslate', { on: S.trOn });
+  setTranslateScript();
+  renderList();
+  renderDetail();
+});
+function setTranslateScript() {
+  if (!window.__nmuTr) return;
+  if (S.trOn) window.__nmuTr.enable(); else window.__nmuTr.disable();
+}
+
+function renderNotice() {
+  const st = S.status, el = $('#notice');
+  let h = '';
+  if (st.syncing || S.sync.text) {
+    h += '<div class="banner"><span class="grow">' + esc(S.sync.text || '正在检查…') + '</span></div>' +
+      '<div class="progress' + (S.sync.pct >= 0 && S.sync.pct < 100 ? '' : ' indet') + '" style="margin:-4px 0 8px"><i style="width:' + Math.max(0, S.sync.pct) + '%"></i></div>';
+  } else if (st.note) {
+    const login = /登录/.test(st.note), key = /API Key/.test(st.note);
+    h += '<div class="banner warn"><span class="grow">' + esc(st.note) + '</span>' +
+      (login ? '<button class="small" data-go="login">去登录</button>' : '') + (key ? '<button class="small" data-go="settings">去设置</button>' : '') + '</div>';
+  }
+  el.innerHTML = h;
+  const btn = $('#syncBtn');
+  btn.classList.toggle('spin', !!st.syncing);
+  btn.disabled = !!st.syncing;
+  btn.title = '上次检查：' + (st.lastSync ? date(st.lastSync) : '从未') + '（F5）';
+}
+
+async function reload() {
+  const [list, st] = await Promise.all([call('list'), call('status')]);
+  S.mods = list;
+  S.byKey = new Map(list.map(m => [m.key, m]));
+  S.status = st;
+  S.trOn = !!st.autoTranslate;
+  $('#trToggle').checked = S.trOn;
+  renderNotice();
+  renderList();
+  if (S.detailKey && S.byKey.has(S.detailKey) && S.detail && !S.detail.loading) {
+    // 列表状态（有无更新、忽略、下载中）同步到详情
+    const m = S.byKey.get(S.detailKey);
+    Object.assign(S.detail, { ignore: m.ignore, ignoreActive: m.ignoreActive, latest: m.latest });
+    renderDetail();
+  }
+}
+
+function onEvent(d) {
+  switch (d.event) {
+    case 'state': reload().catch(e => log(e.message)); break;
+    case 'sync':
+      S.sync = { text: d.text, pct: d.pct };
+      S.status.syncing = d.syncing;
+      renderNotice();
+      break;
+    case 'job': {
+      const j = d.job;
+      S.jobs.set(j.id, j);
+      const m = S.byKey.get(j.key);
+      if (m) m.busy = !['done', 'failed', 'canceled'].includes(j.status);
+      if (S.tab === 'jobs') renderJobs(); else counts();
+      break;
+    }
+    case 'toast': toast(d.text, d.kind); break;
+    case 'theme': applyTheme(d.theme, d.accent); break;
+    case 'status':
+      S.status = d.status;
+      S.trOn = !!d.status.autoTranslate;
+      $('#trToggle').checked = S.trOn;
+      S.tr.clear();
+      if (window.__nmuTr) { window.__nmuTr.disable(); window.__nmuTr.reset(); }
+      setTranslateScript();
+      renderList();
+      renderDetail();
+      break;
+  }
+}
+
+chrome.webview.postMessage({ method: 'ready' });
+(async () => {
+  try {
+    await reload();
+    setTranslateScript();
+    const jobs = await call('jobs');
+    jobs.forEach(j => S.jobs.set(j.id, j));
+    counts();
+  } catch (e) { log(e.message); }
+})();
+</script>
+</body>
+</html>

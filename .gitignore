@@ -1,0 +1,26 @@
+# 编译产物
+bin/
+obj/
+out/
+dist/
+*.pdb
+*.exe
+*.dll
+*.zip
+.vs/
+*.user
+
+# 运行时数据（设置、记录、缓存、日志、浏览器登录状态都在 exe 旁边生成）
+nmu.*.json
+nmu.*.json.*
+nmu.log
+nmu.log.old
+webview2/
+temp/
+
+# 签名与密钥
+*.pfx
+*.p12
+*.pem
+*.key
+.env*
