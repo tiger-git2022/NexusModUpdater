@@ -24,7 +24,7 @@
     <DebugType>embedded</DebugType>
   </PropertyGroup>
   <ItemGroup>
-    <Resource Include="NexusModUpdater\icon.png" />
+    <Resource Include="app.ico" />
     <EmbeddedResource Include="app.ico" LogicalName="NexusModUpdater.app.ico" />
     <EmbeddedResource Include="NexusModUpdater\Web\app.html" LogicalName="NexusModUpdater.app.html" />
     <EmbeddedResource Include="NexusModUpdater\Web\translate.js" LogicalName="NexusModUpdater.translate.js" />

@@ -13,7 +13,7 @@
                  TextOptions.TextFormattingMode="Display"
                  TextOptions.TextRenderingMode="ClearType"
                  RenderOptions.ClearTypeHint="Enabled"
-                 Icon="pack://application:,,,/NexusModUpdater;component/NexusModUpdater/icon.png">
+                 Icon="pack://application:,,,/NexusModUpdater;component/app.ico">
     <ui:FluentWindow.Resources>
         <Style x:Key="NavButton" TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
@@ -56,7 +56,8 @@
 
         <ui:TitleBar Grid.Row="0" Title="N网 Mod 更新">
             <ui:TitleBar.Icon>
-                <ui:ImageIcon Source="pack://application:,,,/NexusModUpdater;component/NexusModUpdater/icon.png"/>
+                <!-- 图片由 UpdateTitleIcon 按屏幕缩放从 ico 里挑对应尺寸的一帧 -->
+                <ui:ImageIcon x:Name="TitleIcon" RenderOptions.BitmapScalingMode="HighQuality"/>
             </ui:TitleBar.Icon>
         </ui:TitleBar>
 
