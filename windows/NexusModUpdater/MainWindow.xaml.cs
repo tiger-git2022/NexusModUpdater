@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
@@ -36,9 +37,26 @@ public partial class MainWindow : FluentWindow
 
 	private readonly DispatcherTimer _tintSave = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
 
+	private static readonly Uri IconUri = new Uri("pack://application:,,,/NexusModUpdater;component/app.ico");
+
+	/// <summary>
+	/// 标题栏左上角的小图标：从 ico 里挑和实际像素一样大的那一帧（150% 缩放时是 24 像素），
+	/// 不拿 256 的大图现场缩小，图标才清楚。换到缩放不同的显示器时重新挑。
+	/// </summary>
+	private void UpdateTitleIcon()
+	{
+		double dip = TitleIcon.ActualWidth > 0 ? TitleIcon.ActualWidth : 16;
+		int px = (int)Math.Ceiling(dip * VisualTreeHelper.GetDpi(this).DpiScaleX - 0.01);
+		var frames = BitmapDecoder.Create(IconUri, BitmapCreateOptions.None, BitmapCacheOption.OnLoad).Frames.OrderBy(f => f.PixelWidth).ToList();
+		TitleIcon.Source = frames.FirstOrDefault(f => f.PixelWidth >= px) ?? frames.Last();
+	}
+
 	public MainWindow()
 	{
 		InitializeComponent();
+		UpdateTitleIcon();
+		Loaded += delegate { UpdateTitleIcon(); };
+		DpiChanged += delegate { UpdateTitleIcon(); };
 		_pages = new FrameworkElement[] { PageApp, PageSite, PageSettings };
 		_app = new AppView(this);
 		_site = new SiteView(this);
