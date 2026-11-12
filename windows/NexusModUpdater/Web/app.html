@@ -217,6 +217,8 @@ body.resizing * { user-select: none !important; }
 .err { color: var(--danger); }
 /* 在等译文：文字慢慢明暗闪烁，译文到了就停（和 translate.js 里的 .nmu-wait 一样） */
 .nmu-wait { animation: nmu-wait 1s ease-in-out infinite alternate; }
+/* 翻译失败：红色虚线，点击重试 */
+.nmu-failed { text-decoration: underline dashed var(--danger); text-underline-offset: 3px; cursor: pointer; }
 @keyframes nmu-wait { from { opacity: 1; } to { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .nmu-wait { animation: none; opacity: .55; } }
 /* 评论 */
@@ -374,11 +376,14 @@ function bytes(b) { return size(Math.round(b / 1024)); }
 const trWait = new Set();
 // 已经要翻、译文还没回来的原文（界面上这些显示为闪烁）
 const trBusy = new Set();
+// 翻译失败的原文 → 原因；点击重试之前不再自动请求
+const trFail = new Map();
 let trTimer = 0;
 function tr(text) {
   if (!S.trOn || !text) return null;
   const t = S.tr.get(text);
   if (t !== undefined) return t === text ? null : t;
+  if (trFail.has(text)) return null;
   trWait.add(text);
   trBusy.add(text);
   if (!trTimer) trTimer = setTimeout(flushTr, 60);
@@ -393,9 +398,13 @@ async function flushTr() {
     batch.forEach(t => S.tr.set(t, t));
     try {
       const r = await call('translate', { texts: batch });
-      batch.forEach((t, j) => { if (r[j]) S.tr.set(t, r[j]); trBusy.delete(t); });
+      batch.forEach((t, j) => {
+        if (r[j] != null) S.tr.set(t, r[j]);
+        else { S.tr.delete(t); trFail.set(t, '这段没翻译出来（翻译服务拒绝了这段文字）'); }
+        trBusy.delete(t);
+      });
     } catch (e) {
-      batch.forEach(t => { S.tr.delete(t); trBusy.delete(t); });
+      batch.forEach(t => { S.tr.delete(t); trBusy.delete(t); trFail.set(t, e.message); });
       all.slice(i + 60).forEach(t => trBusy.delete(t));
       applyTr();
       // 同一个错误一分钟内只提示一次
@@ -411,16 +420,30 @@ function applyTr() {
     const src = el.getAttribute('data-tr');
     const t = S.trOn ? S.tr.get(src) : null;
     el.classList.toggle('nmu-wait', S.trOn && trBusy.has(src));
+    const failed = S.trOn && trFail.has(src);
+    el.classList.toggle('nmu-failed', failed);
     // 译文直接替换原文；鼠标停在上面能看到原文
     if (t && t !== src) {
       el.textContent = t;
       el.title = src;
-    }
+    } else if (failed) el.title = failTitle(src);
+    else el.removeAttribute('title');
   });
+}
+function failTitle(src) { return '翻译失败：' + trFail.get(src) + '\n点击重试（翻译失败的会一起重试）'; }
+// 重试所有翻译失败的：程序界面里的名字、简介，以及详情里由 translate.js 翻的段落
+function retryTr() {
+  const all = Array.from(trFail.keys());
+  trFail.clear();
+  all.forEach(t => tr(t));
+  applyTr();
+  if (window.__nmuTr && window.__nmuTr.retry) window.__nmuTr.retry();
 }
 function trSpan(text, cls) {
   const t = tr(text);
-  return '<span class="' + (cls || '') + (!t && S.trOn && trBusy.has(text) ? ' nmu-wait' : '') + '" data-tr="' + esc(text) + '"' + (t ? ' title="' + esc(text) + '"' : '') + '>' + esc(t || text) + '</span>';
+  const failed = !t && S.trOn && trFail.has(text);
+  return '<span class="' + (cls || '') + (!t && S.trOn && trBusy.has(text) ? ' nmu-wait' : '') + (failed ? ' nmu-failed' : '') + '" data-tr="' + esc(text) + '"' +
+    (t ? ' title="' + esc(text) + '"' : failed ? ' title="' + esc(failTitle(text)) + '"' : '') + '>' + esc(t || text) + '</span>';
 }
 
 // ---- 列表 ----
@@ -1092,6 +1115,7 @@ function toast(text, kind) {
 // ---- 事件 ----
 document.addEventListener('click', e => {
   const t = e.target;
+  if (t.closest('.nmu-failed')) { e.preventDefault(); e.stopPropagation(); retryTr(); return; }
   const pin = t.closest('[data-pin]');
   if (pin) { e.stopPropagation(); const d = pin.dataset.pin; const g = S.games.get(d) || { pinned: -1 }; pinGame(d, !(g.pinned >= 0)); return; }
   const vw = t.closest('[data-view]');
@@ -1326,6 +1350,7 @@ function onEvent(d) {
       $('#trToggle').checked = S.trOn;
       S.tr.clear();
       trBusy.clear();
+      trFail.clear();
       if (window.__nmuTr) { window.__nmuTr.disable(); window.__nmuTr.reset(); }
       setTranslateScript();
       renderList();
