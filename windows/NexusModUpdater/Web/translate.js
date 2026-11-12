@@ -14,8 +14,9 @@
     if (document.getElementById('nmu-tr-style')) return;
     var st = document.createElement('style');
     st.id = 'nmu-tr-style';
-    // .nmu-tr：替换原文的译文（保留换行）；.nmu-err：翻译失败的提示；.nmu-hide：原文里的换行 <br>，替换后藏起来
-    st.textContent = '.nmu-tr{white-space:pre-line}' +
+    // .nmu-tr：替换原文的译文（保留换行）；.nmu-err：翻译失败的提示；.nmu-hide：原文里的换行 <br>，替换后藏起来；
+    // .nmu-wait：已经发出去、在等译文的段落，文字慢慢明暗闪烁（只改透明度，不动排版；不用 ::before/::after，免得和网页自己的样式冲突）
+    st.textContent = '.nmu-tr{white-space:pre-line}' + '.nmu-wait{animation:nmu-wait 1s ease-in-out infinite alternate}@keyframes nmu-wait{from{opacity:1}to{opacity:.35}}@media (prefers-reduced-motion:reduce){.nmu-wait{animation:none;opacity:.55}}' +
       '.nmu-err{display:block;margin:.3em 0 .5em;padding:.15em 0 .15em .6em;border-left:3px solid rgba(248,113,113,.8);opacity:.7;font-size:.97em;white-space:pre-wrap;font-weight:normal;font-style:normal;text-align:left}' +
       '.nmu-hide{display:none!important}';
     (document.head || document.documentElement).appendChild(st);
@@ -91,6 +92,7 @@
   function enqueue(b) {
     if (b.__nmuQueued) return;
     b.__nmuQueued = true;
+    b.classList.add('nmu-wait');
     S.queue.push(b);
     if (!S.timer) S.timer = setTimeout(flush, 120);
   }
@@ -170,6 +172,7 @@
   function restoreAll(root) {
     (root || document).querySelectorAll('.nmu-tr').forEach(function (d) { if (d.parentElement) restore(d.parentElement); });
     (root || document).querySelectorAll('.nmu-err').forEach(function (d) { d.remove(); });
+    (root || document).querySelectorAll('.nmu-wait').forEach(function (b) { b.classList.remove('nmu-wait'); });
   }
 
   function enable() {
@@ -203,6 +206,7 @@
     if (S.io) S.io.disconnect();
     if (S.mo) S.mo.disconnect();
     S.queue = [];
+    S.pending = {};
     restoreAll();
     var all = document.querySelectorAll('*');
     for (var i = 0; i < all.length; i++) { all[i].__nmuSeen = all[i].__nmuQueued = false; }
@@ -216,6 +220,7 @@
     else if (d.nmu === 'tr' && S.pending[d.id]) {
       var batch = S.pending[d.id];
       delete S.pending[d.id];
+      batch.forEach(function (b) { b.classList.remove('nmu-wait'); });
       if (d.error) { if (batch[0]) show(batch[0], /^翻译失败/.test(d.error) ? d.error : '翻译失败：' + d.error, true); return; }
       batch.forEach(function (b, i) { show(b, d.result && d.result[i]); });
     }
