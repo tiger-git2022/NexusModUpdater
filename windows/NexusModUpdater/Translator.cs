@@ -669,42 +669,64 @@ public static class Translator
 		{
 			groups.Add((o, texts));
 		}
-		// 多段合成一次请求：评论区几十段只要几次请求
-		await Task.WhenAll(groups.SelectMany(g => Batches(g.Texts, 20, 5000).Select(b => (g.Opt, b))).Select(async x =>
+		var rejected = new List<string>();
+
+		async Task Run(LlmOptions opt, List<string> b)
 		{
-			LlmOptions opt = x.Opt;
-			List<string> b = x.b;
-			if (b.Count == 1)
+			try
 			{
-				string one = await ChatAsync(opt, SinglePrompt(target), b[0], texts.Count == 1 ? partial : null).ConfigureAwait(false);
-				lock (map)
+				if (b.Count == 1)
 				{
-					map[b[0]] = one;
-				}
-				return;
-			}
-			JArray arr = ParseArray(await ChatAsync(opt, BatchPrompt(target), JsonConvert.SerializeObject(b), null).ConfigureAwait(false));
-			if (arr != null && arr.Count == b.Count)
-			{
-				lock (map)
-				{
-					for (int i = 0; i < b.Count; i++)
+					string one = await ChatAsync(opt, SinglePrompt(target), b[0], texts.Count == 1 ? partial : null).ConfigureAwait(false);
+					lock (map)
 					{
-						map[b[i]] = arr[i].Type == JTokenType.String ? arr[i].Value<string>() : arr[i].ToString();
+						map[b[0]] = one;
 					}
+					return;
 				}
-				return;
-			}
-			Logger.Log("批量翻译返回的条数对不上，改成逐段翻译（" + b.Count + " 段）");
-			foreach (string t in b)
-			{
-				string one = await ChatAsync(opt, SinglePrompt(target), t, null).ConfigureAwait(false);
-				lock (map)
+				JArray arr = ParseArray(await ChatAsync(opt, BatchPrompt(target), JsonConvert.SerializeObject(b), null).ConfigureAwait(false));
+				if (arr != null && arr.Count == b.Count)
 				{
-					map[t] = one;
+					lock (map)
+					{
+						for (int i = 0; i < b.Count; i++)
+						{
+							map[b[i]] = arr[i].Type == JTokenType.String ? arr[i].Value<string>() : arr[i].ToString();
+						}
+					}
+					return;
+				}
+				Logger.Log("批量翻译返回的条数对不上，改成逐段翻译（" + b.Count + " 段）");
+				foreach (string t in b)
+				{
+					await Run(opt, new List<string> { t }).ConfigureAwait(false);
 				}
 			}
-		})).ConfigureAwait(false);
+			catch (LlmRejectedException ex) when (b.Count > 1)
+			{
+				// 整批被接口拒绝：拆成两半再试，最后只有出问题的那几段失败，其余照常翻出来
+				Logger.Log("批量翻译被接口拒绝，拆成两半重试（" + b.Count + " 段）：" + ex.Message);
+				int half = b.Count / 2;
+				await Run(opt, b.Take(half).ToList()).ConfigureAwait(false);
+				await Run(opt, b.Skip(half).ToList()).ConfigureAwait(false);
+			}
+			catch (LlmRejectedException ex)
+			{
+				// 这一段自己就被拒：不放进结果，页面上显示「翻译失败 · 重试」
+				Logger.Log("这段文字的翻译被接口拒绝：" + Short(b[0]).Replace("\n", " ") + "；" + ex.Message);
+				lock (rejected)
+				{
+					rejected.Add(ex.Message);
+				}
+			}
+		}
+
+		// 多段合成一次请求：评论区几十段只要几次请求
+		await Task.WhenAll(groups.SelectMany(g => Batches(g.Texts, 20, 5000).Select(b => Run(g.Opt, b)))).ConfigureAwait(false);
+		if (map.Count == 0 && rejected.Count > 0)
+		{
+			throw new HttpRequestException(rejected[0]);
+		}
 		return map;
 	}
 
@@ -782,13 +804,19 @@ public static class Translator
 			{
 				string err = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
 				int code = (int)resp.StatusCode;
-				throw new HttpRequestException(code switch
+				string what = code switch
 				{
 					401 => o.Name + " 的 Key 无效",
 					402 => o.Name + " 账户余额不足",
 					429 => o.Name + " 请求太频繁，请稍后再试",
 					_ => o.Name + " HTTP " + code + " " + Short(err)
-				});
+				};
+				// 400 / 413 / 422：接口不接受这次请求的内容（多半是其中某段文字触发了限制），换一种分法可能就行
+				if (code == 400 || code == 413 || code == 422)
+				{
+					throw new LlmRejectedException(what);
+				}
+				throw new HttpRequestException(what);
 			}
 			if (!o.Stream)
 			{
@@ -834,4 +862,12 @@ public static class Translator
 	}
 
 	private static string Short(string s) => s == null ? "" : (s.Length > 200 ? s.Substring(0, 200) : s);
+
+	/// <summary>接口拒绝了这次请求的内容（HTTP 400 / 413 / 422），拆小了再发可能就行。</summary>
+	private sealed class LlmRejectedException : HttpRequestException
+	{
+		public LlmRejectedException(string message) : base(message)
+		{
+		}
+	}
 }

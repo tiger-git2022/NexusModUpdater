@@ -4,7 +4,8 @@
 // 和程序通信：postMessage({nmu:'tr', id, texts}) → {nmu:'tr', id, result}；程序发 {nmu:'trOn'} / {nmu:'trOff'} 开关。
 (function () {
   if (window.__nmuTr || !window.chrome || !window.chrome.webview) return;
-  var S = window.__nmuTr = { on: false, seq: 0, pending: {}, queue: [], timer: 0, io: null, mo: null, scanTimer: 0, roots: null, target: 'zh-Hans' };
+  // failed：翻译失败过的原文 → 原因。点「重试」之前不再自动请求，免得页面每次重画都白发一次
+  var S = window.__nmuTr = { on: false, seq: 0, pending: {}, failed: {}, queue: [], timer: 0, io: null, mo: null, scanTimer: 0, roots: null, target: 'zh-Hans' };
   var INLINE = { A: 1, ABBR: 1, B: 1, BDI: 1, BDO: 1, BR: 1, CITE: 1, CODE: 1, DATA: 1, EM: 1, FONT: 1, I: 1, KBD: 1, LABEL: 1, MARK: 1, Q: 1, S: 1, SAMP: 1, SMALL: 1, SPAN: 1, STRIKE: 1, STRONG: 1, SUB: 1, SUP: 1, TIME: 1, TT: 1, U: 1, VAR: 1, WBR: 1, IMG: 1 };
   var SKIP = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, TEXTAREA: 1, INPUT: 1, SELECT: 1, OPTION: 1, BUTTON: 1, SVG: 1, CANVAS: 1, IFRAME: 1, PRE: 1, CODE: 1, NAV: 1, HEADER: 1, FOOTER: 1, TEMPLATE: 1, HEAD: 1 };
   var LETTERS = /\p{L}/u;
@@ -18,13 +19,15 @@
     // .nmu-wait：已经发出去、在等译文的段落，文字慢慢明暗闪烁（只改透明度，不动排版；不用 ::before/::after，免得和网页自己的样式冲突）
     st.textContent = '.nmu-tr{white-space:pre-line}' + '.nmu-wait{animation:nmu-wait 1s ease-in-out infinite alternate}@keyframes nmu-wait{from{opacity:1}to{opacity:.35}}@media (prefers-reduced-motion:reduce){.nmu-wait{animation:none;opacity:.55}}' +
       '.nmu-err{display:block;margin:.3em 0 .5em;padding:.15em 0 .15em .6em;border-left:3px solid rgba(248,113,113,.8);opacity:.7;font-size:.97em;white-space:pre-wrap;font-weight:normal;font-style:normal;text-align:left}' +
-      '.nmu-hide{display:none!important}';
+      '.nmu-hide{display:none!important}' +
+      '.nmu-retry{display:inline-block;margin-left:.5em;padding:0 .45em;border:1px solid rgba(248,113,113,.6);border-radius:.7em;color:#f87171;font-size:.8em;line-height:1.5;cursor:pointer;font-weight:normal;font-style:normal;white-space:nowrap;vertical-align:baseline;text-decoration:none}' +
+      '.nmu-retry:hover{background:rgba(248,113,113,.15)}';
     (document.head || document.documentElement).appendChild(st);
   }
 
   function skipped(el) {
     for (var e = el; e && e !== document.body; e = e.parentElement) {
-      if (SKIP[e.tagName] || e.classList.contains('nmu-tr') || e.classList.contains('nmu-err') || e.getAttribute('translate') === 'no' || e.isContentEditable) return true;
+      if (SKIP[e.tagName] || e.classList.contains('nmu-tr') || e.classList.contains('nmu-err') || e.classList.contains('nmu-retry') || e.getAttribute('translate') === 'no' || e.isContentEditable) return true;
       var role = e.getAttribute('role');
       if (role === 'navigation' || role === 'menu' || role === 'menubar' || role === 'toolbar' || role === 'tablist') return true;
     }
@@ -38,7 +41,7 @@
       if (n.nodeType === 3) out += n.nodeValue;
       else if (n.nodeType === 1) {
         if (n.tagName === 'BR') out += '\n';
-        else if (n.classList && (n.classList.contains('nmu-tr') || n.classList.contains('nmu-err'))) continue;
+        else if (n.classList && (n.classList.contains('nmu-tr') || n.classList.contains('nmu-err') || n.classList.contains('nmu-retry'))) continue;
         else if (INLINE[n.tagName] && !SKIP[n.tagName]) out += ownText(n);
         else if (INLINE[n.tagName] && n.tagName === 'CODE') out += n.textContent;
       }
@@ -85,6 +88,7 @@
       var text = ownText(b).replace(/[ \t ]+/g, ' ').replace(/\n\s*\n\s*\n+/g, '\n\n').trim();
       if (!wanted(text)) return;
       b.__nmuText = text;
+      if (S.failed[text]) { fail(b, S.failed[text]); return; }
       S.io.observe(b);
     });
   }
@@ -111,7 +115,7 @@
   function ownNodes(el, out) {
     for (var n = el.firstChild; n; n = n.nextSibling) {
       if (n.nodeType === 3) out.push(n);
-      else if (n.nodeType === 1 && !(n.classList && n.classList.contains('nmu-tr'))) {
+      else if (n.nodeType === 1 && !(n.classList && (n.classList.contains('nmu-tr') || n.classList.contains('nmu-retry')))) {
         if (n.tagName === 'BR') out.push(n);
         else if (INLINE[n.tagName] && (!SKIP[n.tagName] || n.tagName === 'CODE')) ownNodes(n, out);
       }
@@ -153,25 +157,41 @@
     b.__nmuSaved = saved;
   }
 
-  function show(b, text, err) {
+  function show(b, text) {
     if (!b.isConnected) return;
-    var old = b.querySelector(':scope > .nmu-err');
+    var old = b.querySelector(':scope > .nmu-retry');
     if (old) old.remove();
-    if (err) {
-      var d = document.createElement('div');
-      d.className = 'nmu-err';
-      d.setAttribute('translate', 'no');
-      d.textContent = text;
-      b.appendChild(d);
-      return;
-    }
     if (!text || text === b.__nmuText) return;
     replace(b, text);
   }
 
+  // 翻译失败：段尾放一个「翻译失败 · 重试」，鼠标停上去看原因，点一下把这一页失败的都重新翻
+  function fail(b, msg) {
+    if (!b.isConnected) return;
+    var old = b.querySelector(':scope > .nmu-retry');
+    if (old) old.remove();
+    var s = document.createElement('span');
+    s.className = 'nmu-retry';
+    s.setAttribute('translate', 'no');
+    s.setAttribute('role', 'button');
+    s.title = (msg || '这段没翻译出来') + '\n点击重试（这一页翻译失败的段落会一起重试）';
+    s.textContent = '翻译失败 · 重试';
+    s.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); retryFailed(); });
+    b.appendChild(s);
+  }
+
+  function retryFailed() {
+    S.failed = {};
+    document.querySelectorAll('.nmu-retry').forEach(function (s) {
+      var b = s.parentElement;
+      s.remove();
+      if (b && b.__nmuText) { b.__nmuQueued = false; enqueue(b); }
+    });
+  }
+
   function restoreAll(root) {
     (root || document).querySelectorAll('.nmu-tr').forEach(function (d) { if (d.parentElement) restore(d.parentElement); });
-    (root || document).querySelectorAll('.nmu-err').forEach(function (d) { d.remove(); });
+    (root || document).querySelectorAll('.nmu-err, .nmu-retry').forEach(function (d) { d.remove(); });
     (root || document).querySelectorAll('.nmu-wait').forEach(function (b) { b.classList.remove('nmu-wait'); });
   }
 
@@ -207,6 +227,7 @@
     if (S.mo) S.mo.disconnect();
     S.queue = [];
     S.pending = {};
+    S.failed = {};
     restoreAll();
     var all = document.querySelectorAll('*');
     for (var i = 0; i < all.length; i++) { all[i].__nmuSeen = all[i].__nmuQueued = false; }
@@ -221,13 +242,20 @@
       var batch = S.pending[d.id];
       delete S.pending[d.id];
       batch.forEach(function (b) { b.classList.remove('nmu-wait'); });
-      if (d.error) { if (batch[0]) show(batch[0], /^翻译失败/.test(d.error) ? d.error : '翻译失败：' + d.error, true); return; }
-      batch.forEach(function (b, i) { show(b, d.result && d.result[i]); });
+      batch.forEach(function (b, i) {
+        var r = d.error ? null : d.result && d.result[i];
+        if (r == null) {
+          var why = d.error ? (/^翻译失败/.test(d.error) ? d.error : '翻译失败：' + d.error) : '这段没翻译出来（翻译服务拒绝了这段文字）';
+          S.failed[b.__nmuText] = why;
+          fail(b, why);
+        } else show(b, r);
+      });
     }
   });
 
   // 页面自己（程序内页）可以直接调用
   S.enable = enable;
+  S.retry = retryFailed;
   S.disable = disable;
   S.scan = scanAll;
   S.reset = function (root) {
