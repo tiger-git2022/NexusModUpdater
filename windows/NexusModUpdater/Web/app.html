@@ -215,6 +215,10 @@ body.resizing * { user-select: none !important; }
 .desc .spoiler { border: 1px dashed var(--line); padding: 4px 8px; border-radius: 4px; }
 .desc h1, .desc h2, .desc h3 { font-size: 15px; color: var(--fg); }
 .err { color: var(--danger); }
+/* 在等译文：文字慢慢明暗闪烁，译文到了就停（和 translate.js 里的 .nmu-wait 一样） */
+.nmu-wait { animation: nmu-wait 1s ease-in-out infinite alternate; }
+@keyframes nmu-wait { from { opacity: 1; } to { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .nmu-wait { animation: none; opacity: .55; } }
 /* 评论 */
 .cm-bar { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
 .cm-bar .grow { flex: 1; }
@@ -368,12 +372,15 @@ function bytes(b) { return size(Math.round(b / 1024)); }
 
 // ---- 翻译（名字、简介） ----
 const trWait = new Set();
+// 已经要翻、译文还没回来的原文（界面上这些显示为闪烁）
+const trBusy = new Set();
 let trTimer = 0;
 function tr(text) {
   if (!S.trOn || !text) return null;
   const t = S.tr.get(text);
   if (t !== undefined) return t === text ? null : t;
   trWait.add(text);
+  trBusy.add(text);
   if (!trTimer) trTimer = setTimeout(flushTr, 60);
   return null;
 }
@@ -386,9 +393,11 @@ async function flushTr() {
     batch.forEach(t => S.tr.set(t, t));
     try {
       const r = await call('translate', { texts: batch });
-      batch.forEach((t, j) => { if (r[j]) S.tr.set(t, r[j]); });
+      batch.forEach((t, j) => { if (r[j]) S.tr.set(t, r[j]); trBusy.delete(t); });
     } catch (e) {
-      batch.forEach(t => S.tr.delete(t));
+      batch.forEach(t => { S.tr.delete(t); trBusy.delete(t); });
+      all.slice(i + 60).forEach(t => trBusy.delete(t));
+      applyTr();
       // 同一个错误一分钟内只提示一次
       if (Date.now() - (S.trErrAt || 0) > 60000) { S.trErrAt = Date.now(); toast(e.message, 'error'); }
       return;
@@ -401,6 +410,7 @@ function applyTr() {
   $$('[data-tr]').forEach(el => {
     const src = el.getAttribute('data-tr');
     const t = S.trOn ? S.tr.get(src) : null;
+    el.classList.toggle('nmu-wait', S.trOn && trBusy.has(src));
     // 译文直接替换原文；鼠标停在上面能看到原文
     if (t && t !== src) {
       el.textContent = t;
@@ -410,7 +420,7 @@ function applyTr() {
 }
 function trSpan(text, cls) {
   const t = tr(text);
-  return '<span class="' + (cls || '') + '" data-tr="' + esc(text) + '"' + (t ? ' title="' + esc(text) + '"' : '') + '>' + esc(t || text) + '</span>';
+  return '<span class="' + (cls || '') + (!t && S.trOn && trBusy.has(text) ? ' nmu-wait' : '') + '" data-tr="' + esc(text) + '"' + (t ? ' title="' + esc(text) + '"' : '') + '>' + esc(t || text) + '</span>';
 }
 
 // ---- 列表 ----
@@ -1315,6 +1325,7 @@ function onEvent(d) {
       S.trOn = !!d.status.autoTranslate;
       $('#trToggle').checked = S.trOn;
       S.tr.clear();
+      trBusy.clear();
       if (window.__nmuTr) { window.__nmuTr.disable(); window.__nmuTr.reset(); }
       setTranslateScript();
       renderList();
