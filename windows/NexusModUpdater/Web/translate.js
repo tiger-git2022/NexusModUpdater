@@ -1,4 +1,5 @@
-// 网页翻译：把一段段英文翻译后显示在原文下面（评论区、简介、更新日志…）。
+// 网页翻译：把一段段外文翻译后直接替换原文（评论区、简介、更新日志…），关掉翻译时恢复原文。
+// 替换时不删网页原有的节点（N 网自己的脚本还引用着它们），只把原文的文字清空、在段首插一段译文。
 // 只翻译滚动到附近的段落；网页后加载的内容（比如翻页的评论）也会自动翻译。
 // 和程序通信：postMessage({nmu:'tr', id, texts}) → {nmu:'tr', id, result}；程序发 {nmu:'trOn'} / {nmu:'trOff'} 开关。
 (function () {
@@ -13,14 +14,16 @@
     if (document.getElementById('nmu-tr-style')) return;
     var st = document.createElement('style');
     st.id = 'nmu-tr-style';
-    st.textContent = '.nmu-tr{display:block;margin:.3em 0 .5em;padding:.15em 0 .15em .6em;border-left:3px solid rgba(96,165,250,.75);color:inherit;opacity:.88;font-size:.97em;line-height:1.55;white-space:pre-wrap;font-family:"Microsoft YaHei UI","Segoe UI",sans-serif;font-weight:normal;font-style:normal;text-align:left}' +
-      '.nmu-tr.nmu-err{border-left-color:rgba(248,113,113,.8);opacity:.7}.nmu-tr-inline{display:inline;border:0;padding:0;margin:0 0 0 .5em;opacity:.8}';
+    // .nmu-tr：替换原文的译文（保留换行）；.nmu-err：翻译失败的提示；.nmu-hide：原文里的换行 <br>，替换后藏起来
+    st.textContent = '.nmu-tr{white-space:pre-line}' +
+      '.nmu-err{display:block;margin:.3em 0 .5em;padding:.15em 0 .15em .6em;border-left:3px solid rgba(248,113,113,.8);opacity:.7;font-size:.97em;white-space:pre-wrap;font-weight:normal;font-style:normal;text-align:left}' +
+      '.nmu-hide{display:none!important}';
     (document.head || document.documentElement).appendChild(st);
   }
 
   function skipped(el) {
     for (var e = el; e && e !== document.body; e = e.parentElement) {
-      if (SKIP[e.tagName] || e.classList.contains('nmu-tr') || e.getAttribute('translate') === 'no' || e.isContentEditable) return true;
+      if (SKIP[e.tagName] || e.classList.contains('nmu-tr') || e.classList.contains('nmu-err') || e.getAttribute('translate') === 'no' || e.isContentEditable) return true;
       var role = e.getAttribute('role');
       if (role === 'navigation' || role === 'menu' || role === 'menubar' || role === 'toolbar' || role === 'tablist') return true;
     }
@@ -34,7 +37,7 @@
       if (n.nodeType === 3) out += n.nodeValue;
       else if (n.nodeType === 1) {
         if (n.tagName === 'BR') out += '\n';
-        else if (n.classList && n.classList.contains('nmu-tr')) continue;
+        else if (n.classList && (n.classList.contains('nmu-tr') || n.classList.contains('nmu-err'))) continue;
         else if (INLINE[n.tagName] && !SKIP[n.tagName]) out += ownText(n);
         else if (INLINE[n.tagName] && n.tagName === 'CODE') out += n.textContent;
       }
@@ -102,19 +105,71 @@
     }
   }
 
+  // 这一段自己的文字节点和 <br>（不进块级子元素，它们是别的段落）
+  function ownNodes(el, out) {
+    for (var n = el.firstChild; n; n = n.nextSibling) {
+      if (n.nodeType === 3) out.push(n);
+      else if (n.nodeType === 1 && !(n.classList && n.classList.contains('nmu-tr'))) {
+        if (n.tagName === 'BR') out.push(n);
+        else if (INLINE[n.tagName] && (!SKIP[n.tagName] || n.tagName === 'CODE')) ownNodes(n, out);
+      }
+    }
+    return out;
+  }
+
+  // 把原文换回来
+  function restore(b) {
+    var saved = b.__nmuSaved;
+    if (!saved) return;
+    b.__nmuSaved = null;
+    saved.nodes.forEach(function (x) {
+      if (x.br) x.br.classList.remove('nmu-hide');
+      else if (x.node.nodeValue === '' || x.node.nodeValue === x.blank) x.node.nodeValue = x.value;
+    });
+    if (saved.span.parentNode) saved.span.parentNode.removeChild(saved.span);
+  }
+
+  function replace(b, text) {
+    restore(b);
+    var nodes = ownNodes(b, []);
+    var texts = nodes.filter(function (n) { return n.nodeType === 3 && n.nodeValue.trim(); });
+    if (!texts.length) return;
+    // 译文插在这一段第一处文字所在的、b 的直接子节点前面（文字在链接里时，译文不会变成链接）
+    var at = texts[0];
+    while (at.parentNode !== b) at = at.parentNode;
+    var span = document.createElement('span');
+    span.className = 'nmu-tr';
+    span.setAttribute('translate', 'no');
+    span.title = b.__nmuText.length > 400 ? b.__nmuText.slice(0, 400) + '…' : b.__nmuText;
+    span.textContent = text;
+    var saved = { span: span, nodes: [] };
+    nodes.forEach(function (n) {
+      if (n.nodeType === 3) { saved.nodes.push({ node: n, value: n.nodeValue, blank: '' }); n.nodeValue = ''; }
+      else { n.classList.add('nmu-hide'); saved.nodes.push({ br: n }); }
+    });
+    b.insertBefore(span, at);
+    b.__nmuSaved = saved;
+  }
+
   function show(b, text, err) {
     if (!b.isConnected) return;
-    var old = b.querySelector(':scope > .nmu-tr');
+    var old = b.querySelector(':scope > .nmu-err');
     if (old) old.remove();
+    if (err) {
+      var d = document.createElement('div');
+      d.className = 'nmu-err';
+      d.setAttribute('translate', 'no');
+      d.textContent = text;
+      b.appendChild(d);
+      return;
+    }
     if (!text || text === b.__nmuText) return;
-    var d = document.createElement('div');
-    d.className = 'nmu-tr' + (err ? ' nmu-err' : '');
-    d.setAttribute('translate', 'no');
-    d.textContent = text;
-    // 短的标题、标签放在同一行
-    var cs = getComputedStyle(b);
-    if (cs.display.indexOf('inline') === 0 || cs.display === 'flex' && b.__nmuText.length < 60) d.className += ' nmu-tr-inline';
-    b.appendChild(d);
+    replace(b, text);
+  }
+
+  function restoreAll(root) {
+    (root || document).querySelectorAll('.nmu-tr').forEach(function (d) { if (d.parentElement) restore(d.parentElement); });
+    (root || document).querySelectorAll('.nmu-err').forEach(function (d) { d.remove(); });
   }
 
   function enable() {
@@ -148,7 +203,7 @@
     if (S.io) S.io.disconnect();
     if (S.mo) S.mo.disconnect();
     S.queue = [];
-    document.querySelectorAll('.nmu-tr').forEach(function (d) { d.remove(); });
+    restoreAll();
     var all = document.querySelectorAll('*');
     for (var i = 0; i < all.length; i++) { all[i].__nmuSeen = all[i].__nmuQueued = false; }
   }
@@ -171,7 +226,7 @@
   S.disable = disable;
   S.scan = scanAll;
   S.reset = function (root) {
-    (root || document).querySelectorAll('.nmu-tr').forEach(function (d) { d.remove(); });
+    restoreAll(root);
     var all = (root || document).querySelectorAll('*');
     for (var i = 0; i < all.length; i++) { all[i].__nmuSeen = all[i].__nmuQueued = false; }
   };

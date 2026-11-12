@@ -168,7 +168,13 @@
                                 </ui:CardControl.Header>
                                 <ui:ToggleSwitch x:Name="ScanFolders" Click="Option_Changed"/>
                             </ui:CardControl>
-                            <ui:CardControl Icon="{ui:SymbolIcon ArrowSync24}" Header="打开程序时自动检查更新">
+                            <ui:CardControl Icon="{ui:SymbolIcon ArrowSync24}">
+                                <ui:CardControl.Header>
+                                    <StackPanel>
+                                        <TextBlock Text="自动检查 mod 更新"/>
+                                        <TextBlock Text="打开程序时检查；之后在后台每小时检查一次，从托盘打开窗口时距上次超过 30 分钟也会检查。只查上次看的游戏，缩在托盘里时查到新更新会弹通知" Style="{StaticResource Muted}"/>
+                                    </StackPanel>
+                                </ui:CardControl.Header>
                                 <ui:ToggleSwitch x:Name="SyncOnStart" Click="Option_Changed"/>
                             </ui:CardControl>
                             <ui:CardControl Icon="{ui:SymbolIcon ArrowMinimize24}">

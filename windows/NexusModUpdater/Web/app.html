@@ -173,7 +173,6 @@ body.resizing * { user-select: none !important; }
 .gcover .chip, .gcover .gpin { z-index: 1; }
 .info { min-width: 0; }
 .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.name .orig { font-weight: 400; color: var(--fg3); margin-left: 6px; font-size: 12px; }
 .sum { color: var(--fg2); font-size: 13px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin-top: 2px; }
 .meta { color: var(--fg3); font-size: 12px; display: flex; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
 .meta b { color: var(--new); font-weight: 600; }
@@ -193,16 +192,14 @@ body.resizing * { user-select: none !important; }
 .d-pic { width: 100%; aspect-ratio: 16 / 9; background: var(--thumb) center/cover no-repeat; border-radius: 8px 8px 0 0; }
 .d-head { padding: 12px 16px 6px; }
 .d-head h2 { margin: 0; font-size: 18px; line-height: 1.3; user-select: text; }
-.d-head .orig { color: var(--fg3); font-size: 13px; margin-top: 2px; user-select: text; }
 .d-head .meta { margin-top: 6px; }
 .d-sum { padding: 4px 16px 0; color: var(--fg2); user-select: text; white-space: pre-wrap; }
 .d-btns { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 16px; }
 .d-state { margin: 0 16px 8px; padding: 8px 10px; border-radius: 6px; background: var(--card); color: var(--fg2); font-size: 13px; user-select: text; }
 .d-state b { color: var(--fg); }
-.d-tabs { display: flex; gap: 4px; padding: 4px 12px 0; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2;
-  /* 不用实色底（会在半透明面板上成一条黑带）：平时透明，内容滚到下面时模糊掉 */
-  background: transparent; -webkit-backdrop-filter: blur(24px) saturate(1.3); backdrop-filter: blur(24px) saturate(1.3); }
-.d-body { padding: 10px 16px 24px; user-select: text; }
+.d-tabs { display: flex; gap: 4px; padding: 4px 12px 0; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; background: transparent; }
+/* 标签栏吸在顶上时，内容滚到它底下的那一截裁掉不画（--cut 由 updateCut 算），标签栏和内容不会叠在一起，也不用实色底 */
+.d-body { padding: 10px 16px 24px; user-select: text; -webkit-mask-image: linear-gradient(to bottom, transparent var(--cut, 0px), #000 var(--cut, 0px)); }
 .file { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; background: var(--card); }
 .file.rec { border-color: var(--accent); }
 .file .ft { display: flex; gap: 8px; align-items: flex-start; }
@@ -218,6 +215,20 @@ body.resizing * { user-select: none !important; }
 .desc .spoiler { border: 1px dashed var(--line); padding: 4px 8px; border-radius: 4px; }
 .desc h1, .desc h2, .desc h3 { font-size: 15px; color: var(--fg); }
 .err { color: var(--danger); }
+/* 评论 */
+.cm-bar { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.cm-bar .grow { flex: 1; }
+.cm { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.cm-av { flex: none; width: 32px; height: 32px; border-radius: 50%; background: var(--thumb) center/cover no-repeat; }
+.cm-main { flex: 1; min-width: 0; }
+.cm-h { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; }
+.cm-h b { color: var(--fg); }
+.cm-b { color: var(--fg2); word-break: break-word; line-height: 1.6; margin-top: 2px; }
+.cm-b img { max-width: 100%; height: auto; border-radius: 4px; }
+.cm-b blockquote { margin: 6px 0; padding: 4px 10px; border-left: 3px solid var(--line); color: var(--fg3); }
+.cm-b p { margin: 0 0 6px; }
+.cm-kids .cm { padding: 8px 0 0; border-top: 0; }
+.cm-kids .cm-av { width: 24px; height: 24px; }
 
 /* 下载 */
 .job { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; padding: 10px 12px; border-radius: 6px; background: var(--card); margin-bottom: 6px; }
@@ -312,7 +323,7 @@ const S = {
   view: '', games: new Map(), gq: '', gsort: 'recent',
   tab: 'updates', game: '', q: '', sort: 'latest',
   mods: [], byKey: new Map(), status: {}, jobs: new Map(),
-  sel: new Set(), detailKey: null, detail: null, dtab: 'files',
+  sel: new Set(), detailKey: null, detail: null, dtab: 'files', cm: null,
   tr: new Map(), trOn: true, sync: { text: '', pct: -1 }
 };
 try {
@@ -390,16 +401,16 @@ function applyTr() {
   $$('[data-tr]').forEach(el => {
     const src = el.getAttribute('data-tr');
     const t = S.trOn ? S.tr.get(src) : null;
+    // 译文直接替换原文；鼠标停在上面能看到原文
     if (t && t !== src) {
       el.textContent = t;
-      const o = el.parentElement && el.parentElement.querySelector(':scope > .orig');
-      if (o) o.hidden = false;
+      el.title = src;
     }
   });
 }
 function trSpan(text, cls) {
   const t = tr(text);
-  return '<span class="' + (cls || '') + '" data-tr="' + esc(text) + '">' + esc(t || text) + '</span>';
+  return '<span class="' + (cls || '') + '" data-tr="' + esc(text) + '"' + (t ? ' title="' + esc(text) + '"' : '') + '>' + esc(t || text) + '</span>';
 }
 
 // ---- 列表 ----
@@ -441,7 +452,6 @@ function counts() {
 function rowHtml(m) {
   const pic = m.picture ? '<img loading="lazy" src="' + esc(m.picture) + '" onload="this.parentNode.classList.remove(\'ld\')" onerror="this.parentNode.classList.replace(\'ld\', \'noimg\'); this.remove()">' : '';
   const name = trSpan(m.name);
-  const tName = tr(m.name);
   const sum = m.summary ? trSpan(m.summary.split('\n')[0]) : '<span class="muted">' + (m.hasInfo ? '' : '（还没查到详细信息）') + '</span>';
   const chips = [];
   if (m.hasUpdate && !(m.available && !m.ignoreActive)) chips.push('<span class="chip new">有更新</span>');
@@ -456,7 +466,7 @@ function rowHtml(m) {
   return '<div class="row' + (S.detailKey === m.key ? ' sel' : '') + (m.ignoreActive ? ' dim' : '') + '" data-key="' + esc(m.key) + '">' +
     '<input type="checkbox" class="pick"' + (S.sel.has(m.key) ? ' checked' : '') + '>' +
     '<div class="thumb ' + (m.picture ? 'ld' : 'noimg') + '">' + pic + '</div>' +
-    '<div class="info"><div class="name">' + name + '<span class="orig"' + (tName ? '' : ' hidden') + '>' + esc(m.name) + '</span></div>' +
+    '<div class="info"><div class="name">' + name + '</div>' +
     '<div class="sum">' + sum + '</div>' +
     '<div class="meta">' + (m.author ? '<span>' + esc(m.author) + '</span>' : '') + (m.version ? '<span>v' + esc(m.version) + '</span>' : '') + when + '</div></div>' +
     '<div class="acts">' + chips.join('') +
@@ -781,12 +791,11 @@ function renderDetail() {
   const el = $('#detail');
   if (!d) { el.innerHTML = ''; return; }
   const m = S.byKey.get(d.key) || {};
-  const tName = tr(d.name);
+  if (S.dtab === 'posts' && (!S.cm || S.cm.key !== d.key)) startComments(1, false);
   const url = 'https://www.nexusmods.com/' + d.domain + '/mods/' + d.modId;
   let h = '';
   h += '<div class="d-pic' + (d.picture ? '' : ' noimg') + '"' + (d.picture ? ' data-bg="' + esc(d.picture) + '"' : '') + '></div>';
   h += '<div class="d-head"><div style="display:flex;gap:8px;align-items:flex-start"><h2 style="flex:1">' + trSpan(d.name) + '</h2><button class="small ghost" id="dClose" title="关闭">✕</button></div>' +
-    '<div class="orig"' + (tName ? '' : ' hidden') + '>' + esc(d.name) + '</div>' +
     '<div class="meta"><span>' + esc(d.game || m.game || '') + '</span>' + (d.author ? '<span>作者 ' + esc(d.author) + '</span>' : '') + (d.version ? '<span>v' + esc(d.version) + '</span>' : '') +
     (d.endorsements ? '<span>👍 ' + d.endorsements + '</span>' : '') + (d.downloads ? '<span>下载 ' + d.downloads + '</span>' : '') + '<span>ID ' + d.modId + '</span></div></div>';
   if (d.summary) h += '<div class="d-sum tr-scope"><p style="margin:0">' + esc(d.summary).replace(/\n/g, '<br>') + '</p></div>';
@@ -807,14 +816,96 @@ function renderDetail() {
   (d.errors || []).forEach(e => st.push('<span class="err">' + esc(e) + '</span>'));
   if (d.loading) st.push('正在获取详情…');
   if (st.length) h += '<div class="d-state">' + st.join('<br>') + '</div>';
-  h += '<div class="d-tabs">' + [['files', '文件' + (d.files ? '（' + d.files.length + '）' : '')], ['log', '更新日志'], ['desc', '简介']].map(([k, t]) =>
+  h += '<div class="d-tabs">' + [['files', '文件' + (d.files ? '（' + d.files.length + '）' : '')], ['log', '更新日志'], ['desc', '简介'], ['posts', '评论']].map(([k, t]) =>
     '<button class="tab' + (S.dtab === k ? ' on' : '') + '" data-dtab="' + k + '">' + t + '</button>').join('') + '</div>';
   h += '<div class="d-body tr-scope">' + detailBody(d) + '</div>';
   const top = el.scrollTop;
   el.innerHTML = h;
   el.scrollTop = d.loading ? 0 : top;
+  updateCut();
   if (S.trOn && window.__nmuTr) window.__nmuTr.scan();
 }
+
+// ---- 评论（程序在后台打开 N 网评论页读出来） ----
+function startComments(page, force) {
+  const d = S.detail;
+  if (!d || !d.domain) return;
+  const key = d.key;
+  const old = S.cm && S.cm.key === key ? S.cm.data : null;
+  S.cm = { key, page, loading: true, data: old };
+  call('comments', { domain: d.domain, modId: d.modId, page, force: !!force }).then(r => {
+    if (!S.cm || S.cm.key !== key || S.cm.page !== page) return;
+    S.cm = { key, page, data: r };
+    if (S.dtab === 'posts' && S.detailKey === key) { renderDetail(); toTabs(); }
+  }, e => {
+    if (!S.cm || S.cm.key !== key || S.cm.page !== page) return;
+    S.cm = { key, page, data: old, error: e.message };
+    if (S.dtab === 'posts' && S.detailKey === key) renderDetail();
+  });
+}
+function loadComments(page, force) { startComments(page, force); renderDetail(); }
+// 翻页后如果标签栏已经吸在顶上，滚回到第一条评论
+function toTabs() {
+  const el = $('#detail'), tb = el.querySelector('.d-tabs'), body = el.querySelector('.d-body');
+  if (!tb || !body) return;
+  const over = tb.getBoundingClientRect().bottom - body.getBoundingClientRect().top;
+  if (over > 0) el.scrollTop -= over;
+}
+function commentsBody(d) {
+  const c = S.cm && S.cm.key === d.key ? S.cm : null;
+  if (!c || (c.loading && !c.data)) return '<div class="muted">正在读取评论…（要在后台打开 N网 页面，第一次会慢几秒）</div>';
+  if (c.error && !c.data) return '<div class="err">' + esc(c.error) + '</div><div style="margin-top:8px"><button data-cm-page="' + c.page + '" data-cm-force="1">重试</button></div>';
+  const r = c.data;
+  const pager = r.pages > 1 ? '<button class="small" data-cm-page="' + (r.page - 1) + '"' + (r.page <= 1 || c.loading ? ' disabled' : '') + '>上一页</button>' +
+    '<button class="small" data-cm-page="' + (r.page + 1) + '"' + (r.page >= r.pages || c.loading ? ' disabled' : '') + '>下一页</button>' : '';
+  let h = '<div class="cm-bar" translate="no"><span class="muted">' + (r.pages > 1 ? '第 ' + r.page + ' / ' + r.pages + ' 页' : '') +
+    (c.loading ? '　加载中…' : '') + (c.error ? '　<span class="err">' + esc(c.error) + '</span>' : '') + '</span><span class="grow"></span>' +
+    pager + '<button class="small" id="dPosts2">去 N网发评论</button></div>';
+  if (!r.comments.length) h += '<div class="muted">' + (r.note ? esc(r.note) : '还没有评论') + '</div>';
+  h += r.comments.map(cmHtml).join('');
+  if (r.pages > 1 && r.comments.length > 3) h += '<div class="cm-bar" translate="no" style="margin-top:8px"><span class="grow"></span>' + pager + '</div>';
+  return h;
+}
+function cmHtml(c) {
+  return '<div class="cm"><div class="cm-av' + (c.avatar ? '' : ' noimg') + '"' + (c.avatar ? ' data-bg="' + esc(c.avatar) + '"' : '') + '></div><div class="cm-main">' +
+    '<div class="cm-h" translate="no"><b>' + esc(c.name) + '</b>' + (c.author ? '<span class="chip acc">作者</span>' : '') + (c.sticky ? '<span class="chip">置顶</span>' : '') +
+    '<span class="muted" title="' + date(c.date) + '">' + ago(c.date) + '</span></div>' +
+    '<div class="cm-b">' + cleanHtml(c.html) + '</div>' +
+    (c.replies && c.replies.length ? '<div class="cm-kids">' + c.replies.map(cmHtml).join('') + '</div>' : '') + '</div></div>';
+}
+// 评论正文是 N 网的 HTML：只留文字和常见格式，链接改成程序里打开，图片只留 https
+function cleanHtml(html) {
+  const doc = new DOMParser().parseFromString('<div>' + (html || '') + '</div>', 'text/html');
+  const KEEP = { B: 'b', STRONG: 'b', I: 'i', EM: 'i', U: 'u', S: 's', STRIKE: 's', DEL: 's', P: 'p', UL: 'ul', OL: 'ol', LI: 'li', CODE: 'code', PRE: 'pre', BLOCKQUOTE: 'blockquote', H1: 'b', H2: 'b', H3: 'b', H4: 'b' };
+  const walk = node => {
+    let out = '';
+    node.childNodes.forEach(n => {
+      if (n.nodeType === 3) { out += esc(n.nodeValue); return; }
+      if (n.nodeType !== 1 || /^(SCRIPT|STYLE|IFRAME|OBJECT|BUTTON|INPUT|TEXTAREA|SVG)$/i.test(n.tagName)) return;
+      const inner = walk(n);
+      const tag = n.tagName, cls = String(n.getAttribute('class') || '');
+      if (tag === 'BR') out += '<br>';
+      else if (tag === 'HR') out += '<hr>';
+      else if (tag === 'IMG') { const u = n.getAttribute('src') || ''; if (/^https:\/\//i.test(u)) out += '<img loading="lazy" src="' + esc(u) + '">'; }
+      else if (tag === 'A') { const u = n.getAttribute('href') || ''; out += /^https?:\/\//i.test(u) ? '<a data-href="' + esc(u) + '">' + inner + '</a>' : inner; }
+      else if (/quote/i.test(cls)) out += '<blockquote>' + inner + '</blockquote>';
+      else if (/spoiler/i.test(cls)) out += '<details class="spoiler"><summary>剧透 / 展开</summary>' + inner + '</details>';
+      else if (KEEP[tag]) out += '<' + KEEP[tag] + '>' + inner + '</' + KEEP[tag] + '>';
+      else if (tag === 'DIV') out += '<div>' + inner + '</div>';
+      else out += inner;
+    });
+    return out;
+  };
+  return walk(doc.body.firstChild).trim();
+}
+
+// 标签栏底边以上的内容不画：算出内容有多高一截滚到了标签栏底下
+function updateCut() {
+  const el = $('#detail'), tabs = el.querySelector('.d-tabs'), body = el.querySelector('.d-body');
+  if (!tabs || !body) return;
+  body.style.setProperty('--cut', Math.max(0, tabs.getBoundingClientRect().bottom - body.getBoundingClientRect().top) + 'px');
+}
+$('#detail').addEventListener('scroll', updateCut, { passive: true });
 
 const CATS = { 1: '主文件', 2: '更新补丁', 3: '可选文件', 4: '旧版本', 5: '其他', 6: '已删除', 7: '已归档' };
 function detailBody(d) {
@@ -839,6 +930,7 @@ function detailBody(d) {
     });
     return h;
   }
+  if (S.dtab === 'posts') return commentsBody(d);
   if (S.dtab === 'log') {
     if (!d.changelog || !d.changelog.length) return '<div class="muted">' + (d.loading ? '加载中…' : '作者没有写更新日志') + '</div>';
     return '<div class="cl">' + d.changelog.map(c => '<h4>' + esc(c.version) + '</h4><ul>' + (c.lines || []).map(l => '<li>' + esc(l) + '</li>').join('') + '</ul>').join('') + '</div>';
@@ -1050,11 +1142,13 @@ document.addEventListener('click', e => {
   if (t.id === 'clearJobs') { call('clearJobs').then(() => { Array.from(S.jobs.values()).filter(jobDone).forEach(j => S.jobs.delete(j.id)); renderList(); }); return; }
   // 详情
   if (t.id === 'dClose') { closeDetail(); return; }
-  if (t.id === 'dRefresh') { openDetail(S.detailKey, true); return; }
+  if (t.id === 'dRefresh') { openDetail(S.detailKey, true); if (S.dtab === 'posts') loadComments(S.cm && S.cm.key === S.detailKey ? S.cm.page : 1, true); return; }
+  const cp = t.closest('[data-cm-page]');
+  if (cp) { if (!cp.disabled) loadComments(+cp.dataset.cmPage, !!cp.dataset.cmForce); return; }
   if (t.id === 'dUpdate') { doUpdate([S.detailKey]); return; }
-  if (t.id === 'dPosts' || t.id === 'dPage') {
+  if (t.id === 'dPosts' || t.id === 'dPosts2' || t.id === 'dPage') {
     const d = S.detail;
-    call('openSite', { url: 'https://www.nexusmods.com/' + d.domain + '/mods/' + d.modId + (t.id === 'dPosts' ? '?tab=posts' : '') });
+    call('openSite', { url: 'https://www.nexusmods.com/' + d.domain + '/mods/' + d.modId + (t.id !== 'dPage' ? '?tab=posts' : '') });
     return;
   }
   if (t.id === 'dIgnore') { const m = S.byKey.get(S.detailKey); const r = t.getBoundingClientRect(); if (m) modMenu(m, r.left, r.bottom + 4); return; }

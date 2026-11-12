@@ -342,6 +342,8 @@ public sealed class AppView : Grid
 			return GameCatalog.Json();
 		case "detail":
 			return await Task.Run(() => Engine.DetailAsync(a.Value<string>("domain"), a.Value<int>("modId"), a.Value<bool?>("force") ?? false));
+		case "comments":
+			return await CommentReader.ReadAsync(a.Value<string>("domain"), a.Value<int>("modId"), a.Value<int?>("page") ?? 1, a.Value<bool?>("force") ?? false);
 		case "translate":
 		{
 			var texts = (a["texts"] as JArray)?.Select(t => t.ToString()).ToList() ?? new List<string>();
