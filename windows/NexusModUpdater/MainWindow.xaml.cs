@@ -91,27 +91,14 @@ public partial class MainWindow : FluentWindow
 			_site.OpenDownload(job);
 		});
 		SourceInitialized += delegate { WebEnv.HostHwnd = new WindowInteropHelper(this).Handle; };
-		Loaded += async delegate
+		Loaded += delegate
 		{
 			_app.Start();
 			UpdateSide();
-			bool sync, check;
-			lock (Store.Lock)
-			{
-				sync = Store.Cfg.SyncOnStart;
-				check = Store.Cfg.CheckAppUpdate;
-			}
-			if (sync)
-			{
-				// 只检查上次看的那个游戏；没选过游戏时只读下载记录
-				_ = Engine.SyncAsync(Store.Cfg.LastGame);
-			}
-			if (check)
-			{
-				await CheckAppUpdateAsync(false);
-			}
+			AutoCheck(true);
 		};
 		InitTray();
+		InitAutoCheck();
 		Closing += (s, e) =>
 		{
 			// 点关闭：缩到托盘（设置里可以关掉）
@@ -133,6 +120,11 @@ public partial class MainWindow : FluentWindow
 
 	public void BringToFront()
 	{
+		// 从托盘（或再次双击 exe）打开时，距上次检查有一阵了就再查一次
+		if (IsLoaded && (!IsVisible || WindowState == WindowState.Minimized))
+		{
+			AutoCheck(true);
+		}
 		if (WindowState == WindowState.Minimized)
 		{
 			WindowState = WindowState.Normal;
@@ -244,6 +236,7 @@ public partial class MainWindow : FluentWindow
 	{
 		NavBadge.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
 		NavCount.Text = n > 99 ? "99+" : n.ToString();
+		NotifyNewUpdates(n);
 	}
 
 	public void FlagSite()
@@ -843,6 +836,7 @@ public partial class MainWindow : FluentWindow
 				return;
 			}
 			UpdateState.Text = "有新版本 v" + _appUpdate.Version;
+			NotifyAppUpdate(_appUpdate.Version);
 			AppUpdateText.Text = "新版本 v" + _appUpdate.Version + " 可以更新";
 			AppUpdateBox.Visibility = Visibility.Visible;
 			if (manual)
