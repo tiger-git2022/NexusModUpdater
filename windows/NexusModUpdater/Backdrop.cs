@@ -12,7 +12,7 @@ namespace NexusModUpdater;
 /// <summary>
 /// 亚克力 / 云母背景的自我修复。
 /// 背景是 DWM 画的，WPF-UI 只在窗口创建和切换背景时设一次。显卡驱动重置（玩游戏、切全屏、更新驱动）、
-/// 睡眠唤醒、锁屏、远程桌面、换显示器时 DWM 会重启或重建窗口，之前设的背景就丢了，窗口只剩一层黑底
+/// 睡眠唤醒、锁屏、远程桌面、换显示器、改缩放比例时 DWM 会重启或重建窗口，之前设的背景就丢了，窗口只剩一层黑底
 /// 加上面的深色遮罩，要重启程序才恢复。这里在这些时候和窗口从托盘重新显示时，把背景重新设一遍。
 /// </summary>
 public partial class MainWindow
@@ -21,6 +21,7 @@ public partial class MainWindow
 	private const int WM_POWERBROADCAST = 0x0218;
 	private const int WM_DWMCOMPOSITIONCHANGED = 0x031E;
 	private const int WM_THEMECHANGED = 0x031A;
+	private const int WM_DPICHANGED = 0x02E0;
 	private const int PBT_APMRESUMESUSPEND = 0x7;
 	private const int PBT_APMRESUMEAUTOMATIC = 0x12;
 
@@ -96,6 +97,10 @@ public partial class MainWindow
 				break;
 			case WM_DISPLAYCHANGE:
 				QueueBackdropRepair("显示器变化");
+				break;
+			case WM_DPICHANGED:
+				// 改系统缩放比例或拖到缩放不同的显示器：程序是按显示器适配 DPI 的，这时只收到这条，不会有 WM_DISPLAYCHANGE
+				QueueBackdropRepair("缩放比例变化");
 				break;
 			case WM_THEMECHANGED:
 				QueueBackdropRepair("系统主题变化");
