@@ -99,6 +99,7 @@ public partial class MainWindow : FluentWindow
 		};
 		InitTray();
 		InitAutoCheck();
+		InitBackdropRepair();
 		Closing += (s, e) =>
 		{
 			// 点关闭：缩到托盘（设置里可以关掉）
